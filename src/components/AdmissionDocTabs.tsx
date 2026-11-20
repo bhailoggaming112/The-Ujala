@@ -64,7 +64,7 @@ export function AdmissionDocTabs({ tab, form, update, patch, onToast }: {
 
   if (tab === 'submitted') {
     return (
-      <div>
+      <div className="admission-tab-panel">
         <div className="form-section-title">Submitted Doc</div>
         <div className="mt-4 space-y-4">
           {submittedDocs.map((doc) => (
@@ -101,7 +101,7 @@ export function AdmissionDocTabs({ tab, form, update, patch, onToast }: {
 
   if (tab === 'issued') {
     return (
-      <div>
+      <div className="admission-tab-panel">
         <div className="form-section-title">Issued Doc</div>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {issuedFields.map((field) => (
@@ -152,7 +152,7 @@ export function AdmissionDocTabs({ tab, form, update, patch, onToast }: {
   });
 
   return (
-    <div>
+    <div className="admission-tab-panel">
       <div className="form-section-title">Leaving Info</div>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={labelClass}>Leaving Status

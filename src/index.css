@@ -63,3 +63,265 @@ button { cursor: pointer; }
 @media (max-width: 760px) { .search-panel { padding: 17px; }.search-panel-heading { flex-direction: column; gap: 13px; }.filter-section { display: block; }.filter-section-label { margin-bottom: 9px; }.detail-search-grid { grid-template-columns: repeat(2, 1fr); }.search-actions { align-items: stretch; }.action-divider { display: none; }.notice-actions { width: 100%; margin-left: 0; }.notice-actions select { flex: 1; }.quick-notice-bar { align-items: start; flex-direction: column; gap: 13px; }.quick-notice-buttons { width: 100%; }.quick-notice-buttons button { flex: 1; justify-content: center; }.settings-intro { align-items: start; flex-wrap: wrap; }.settings-intro .primary-button { width: 100%; }.template-card-grid, .template-language-grid { grid-template-columns: 1fr; }.search-results-heading { align-items: start; flex-direction: column; gap: 6px; } }
 @media (max-width: 1100px) { .sidebar { width: 220px; }.page { padding-left: 27px; padding-right: 27px; }.topbar { padding: 0 27px; }.module-grid { grid-template-columns: repeat(3, 1fr); }.stats-row { grid-template-columns: repeat(2, 1fr); }.school-illustration { opacity: .7; } }
 @media (max-width: 760px) { .sidebar { width: 68px; padding: 20px 9px; }.brand { padding: 0 8px 28px; }.brand > span, .school-switcher > div:not(.school-avatar), .school-switcher > svg, .nav-label, .nav-button span:not(.nav-count), .help-card, .settings-link { display: none; }.school-switcher { margin: 0 0 24px; padding: 0; background: none; justify-content: center; }.nav-button { justify-content: center; padding: 12px 0; }.nav-count { position: absolute; margin: -23px -24px 0 0; }.topbar { padding: 0 16px; height: 65px; }.breadcrumb span:first-child, .crumb-separator { display: none; }.profile-button span, .profile-button > svg { display: none; }.page { padding: 25px 16px 45px; }.welcome-banner { min-height: 218px; padding: 25px 22px; }.welcome-banner h1 { font-size: 26px; max-width: 300px; }.school-illustration { left: 0; opacity: .32; }.stats-row { gap: 9px; margin: 16px 0 27px; }.stat-card { padding: 12px; gap: 8px; }.stat-icon { width: 33px; height: 33px; }.stat-card strong { font-size: 18px; }.stat-card > div:last-child > span { font-size: 10px; }.stat-card small { font-size: 9px; }.module-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }.module-card { min-height: 130px; padding: 14px; }.module-grid .module-card:last-child { grid-column: span 2; }.overview-grid, .report-grid { grid-template-columns: 1fr; }.attendance-content { gap: 20px; }.donut { width: 135px; height: 135px; }.section-heading h2 { font-size: 18px; }.module-heading { align-items: start; flex-direction: column; gap: 15px; }.module-heading h1 { font-size: 27px; }.search-field { width: 100%; }.table-toolbar { align-items: stretch; flex-direction: column; }.form-grid, .admission-info-grid { grid-template-columns: 1fr; }.form-heading { flex-wrap: wrap; gap: 14px; }.form-heading-side { flex-wrap: wrap; }.form-footer { align-items: stretch; flex-direction: column; gap: 15px; }.form-footer div { justify-content: end; }.section-cards, .tool-grid { grid-template-columns: 1fr; }.section-workspace { grid-template-columns: 1fr; }.selectable-row { align-items: start; }.context-tag { display: none; }.attendance-toolbar { align-items: start; flex-direction: column; gap: 11px; }.att-filters { flex-direction: column; align-items: stretch; }.att-filters .control-field, .att-filter-check { width: 100%; }.att-filter-check { justify-content: center; }.att-summary { align-items: stretch; flex-direction: column; }.att-summary .search-field { width: 100%; }.att-actions { width: 100%; }.att-actions button { flex: 1; justify-content: center; } }
+
+/* ==========================================================================
+   Depth & motion layer
+   Compositor-only properties (transform / opacity / box-shadow) so the UI
+   stays smooth on low-end mobile and packaged Android builds.
+   ========================================================================== */
+
+:root {
+  --lift-ease: cubic-bezier(.22, .61, .36, 1);
+  --lift-shadow: 0 16px 32px rgba(41, 78, 99, .16), 0 3px 8px rgba(41, 78, 99, .08);
+  --lift-shadow-soft: 0 12px 26px rgba(41, 78, 99, .13), 0 2px 6px rgba(41, 78, 99, .06);
+  --glow-ring: 0 0 0 1px rgba(93, 189, 214, .55), 0 0 18px rgba(93, 189, 214, .28);
+}
+
+@keyframes lift-in {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes lift-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lift-pop {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes lift-row {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes lift-veil {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media screen and (prefers-reduced-motion: no-preference) {
+
+  /* --- Cards: lift, deepen shadow, and glow the border on hover/tap ------- */
+  .stat-card,
+  .module-card,
+  .panel,
+  .section-card,
+  .tool-card,
+  .template-card,
+  .report-card,
+  .parent-child-card,
+  .admin-stat,
+  .section-list-item,
+  .notice-preview {
+    transition: transform .28s var(--lift-ease), box-shadow .28s var(--lift-ease), border-color .28s ease;
+  }
+
+  .stat-card:hover,
+  .section-card:hover,
+  .tool-card:hover,
+  .template-card:hover,
+  .report-card:hover,
+  .parent-child-card:hover,
+  .admin-stat:hover,
+  .section-list-item:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--lift-shadow-soft);
+    border-color: rgba(93, 189, 214, .5);
+  }
+
+  .module-card:hover {
+    transform: translateY(-6px) scale(1.012);
+    box-shadow: var(--lift-shadow), 0 0 0 1px rgba(93, 189, 214, .4);
+  }
+
+  /* Tapping on touch devices still gives feedback without a stuck state */
+  .stat-card:active,
+  .module-card:active,
+  .section-card:active,
+  .tool-card:active,
+  .template-card:active,
+  .parent-child-card:active,
+  .admin-stat:active,
+  .section-list-item:active {
+    transform: translateY(-1px) scale(.995);
+    box-shadow: 0 6px 14px rgba(41, 78, 99, .12);
+  }
+
+  /* --- Buttons: subtle depth and press feedback --------------------------- */
+  .primary-button,
+  .secondary-button,
+  .danger-button,
+  .auth-submit,
+  .row-action-btn,
+  .att-mark,
+  .reminder-button,
+  .warning-button,
+  .add-template-button,
+  .filter-toggle,
+  .add-student-button,
+  .text-button,
+  .settings-link {
+    transition: transform .2s var(--lift-ease), box-shadow .2s var(--lift-ease), background-color .2s ease, border-color .2s ease, color .2s ease;
+  }
+
+  .primary-button:hover,
+  .danger-button:hover,
+  .auth-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(61, 164, 197, .34);
+  }
+
+  .secondary-button:hover,
+  .row-action-btn:hover,
+  .filter-toggle:hover,
+  .add-student-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(41, 78, 99, .14);
+    border-color: rgba(93, 189, 214, .55);
+  }
+
+  .reminder-button:hover,
+  .warning-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 18px rgba(41, 78, 99, .2);
+  }
+
+  .att-mark:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(41, 78, 99, .14);
+  }
+
+  .primary-button:active,
+  .secondary-button:active,
+  .danger-button:active,
+  .auth-submit:active,
+  .row-action-btn:active,
+  .att-mark:active:not(:disabled),
+  .reminder-button:active,
+  .warning-button:active {
+    transform: translateY(0) scale(.97);
+    box-shadow: 0 3px 8px rgba(41, 78, 99, .16);
+  }
+
+  /* --- Tabs and nav: underline/pill glow on hover ------------------------- */
+  .admission-tabs button,
+  .auth-tabs button,
+  .segmented-control button {
+    transition: transform .2s var(--lift-ease), box-shadow .2s var(--lift-ease), color .2s ease, border-color .2s ease, background-color .2s ease;
+  }
+
+  .admission-tabs button:hover,
+  .segmented-control button:hover {
+    color: #2d8ca8;
+    transform: translateY(-1px);
+    text-shadow: 0 0 12px rgba(93, 189, 214, .5);
+  }
+
+  .segmented-control button:hover {
+    box-shadow: var(--glow-ring);
+  }
+
+  .auth-tabs button:hover {
+    color: #277a9b;
+  }
+
+  .admission-tabs button:active,
+  .auth-tabs button:active,
+  .segmented-control button:active {
+    transform: translateY(0) scale(.97);
+  }
+
+  .nav-button {
+    transition: transform .2s var(--lift-ease), background-color .2s ease, color .2s ease, box-shadow .2s ease;
+  }
+  .nav-button:hover {
+    transform: translateX(3px);
+    box-shadow: inset 0 0 0 1px rgba(93, 189, 214, .4);
+  }
+  .nav-button.active {
+    box-shadow: inset 0 0 0 1px rgba(54, 160, 196, .35), 0 6px 14px rgba(54, 160, 196, .18);
+  }
+
+  /* --- Modal entrance ----------------------------------------------------- */
+  .notice-overlay {
+    animation: lift-veil .22s ease both;
+  }
+  .notice-modal {
+    animation: lift-pop .3s var(--lift-ease) both;
+  }
+  .notice-preview {
+    animation: lift-pop .3s var(--lift-ease) both;
+  }
+
+  /* --- Tab panel + page entrance ----------------------------------------- */
+  .admission-info-grid,
+  .admission-tab-panel {
+    animation: lift-in .34s var(--lift-ease) both;
+  }
+
+  .page > .module-heading,
+  .search-panel,
+  .roster-panel,
+  .attendance-manager > .panel,
+  .template-settings > *,
+  .admin-panel > *,
+  .dashboard-page > .welcome-banner,
+  .dashboard-page > .section-heading,
+  .dashboard-page > .overview-grid {
+    animation: lift-in .4s var(--lift-ease) backwards;
+  }
+
+  .stats-row > *,
+  .module-grid > * {
+    animation: lift-in .38s var(--lift-ease) backwards;
+  }
+
+  /* Small, capped stagger so long grids never feel sluggish */
+  .stats-row > *:nth-child(2), .module-grid > *:nth-child(2) { animation-delay: .04s; }
+  .stats-row > *:nth-child(3), .module-grid > *:nth-child(3) { animation-delay: .08s; }
+  .stats-row > *:nth-child(4), .module-grid > *:nth-child(4) { animation-delay: .12s; }
+  .stats-row > *:nth-child(5), .module-grid > *:nth-child(5) { animation-delay: .16s; }
+  .stats-row > *:nth-child(n+6), .module-grid > *:nth-child(n+6) { animation-delay: .2s; }
+
+  /* --- List entrance ------------------------------------------------------ */
+  .recent-item,
+  .selectable-row {
+    animation: lift-row .34s var(--lift-ease) backwards;
+  }
+  .recent-item:nth-child(2), .selectable-row:nth-child(2) { animation-delay: .03s; }
+  .recent-item:nth-child(3), .selectable-row:nth-child(3) { animation-delay: .06s; }
+  .recent-item:nth-child(4), .selectable-row:nth-child(4) { animation-delay: .09s; }
+  .recent-item:nth-child(n+5), .selectable-row:nth-child(n+5) { animation-delay: .12s; }
+
+  .section-list-item {
+    animation: lift-in .3s var(--lift-ease) backwards;
+  }
+
+  tbody tr {
+    animation: lift-fade .3s ease backwards;
+  }
+
+  .profile-menu {
+    animation: lift-pop .22s var(--lift-ease) both;
+    transform-origin: top right;
+  }
+}
+
+/* Motion off: keep every layout and color change, drop movement only. */
+@media screen and (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stat-card:hover, .module-card:hover, .section-card:hover, .tool-card:hover,
+  .template-card:hover, .report-card:hover, .parent-child-card:hover,
+  .admin-stat:hover, .section-list-item:hover,
+  .primary-button:hover, .secondary-button:hover, .danger-button:hover,
+  .auth-submit:hover, .row-action-btn:hover, .att-mark:hover:not(:disabled),
+  .reminder-button:hover, .warning-button:hover,
+  .admission-tabs button:hover, .segmented-control button:hover,
+  .nav-button:hover {
+    transform: none !important;
+  }
+}
