@@ -57,7 +57,7 @@ type ActiveModal =
   | { kind: 'delete'; student: Student }
   | null;
 
-export function StudentSearch({ students, onToast, onRefresh }: { students: Student[]; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
+export function StudentSearch({ students, loading = false, loadError = null, onToast, onRefresh }: { students: Student[]; loading?: boolean; loadError?: string | null; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
   const [draft, setDraft] = useState<SearchFilters>(emptySearchFilters);
   const [applied, setApplied] = useState<SearchFilters>(emptySearchFilters);
   const [showAdvanced, setShowAdvanced] = useState(true);
@@ -216,7 +216,7 @@ export function StudentSearch({ students, onToast, onRefresh }: { students: Stud
       </form>
 
       <div className="search-results-heading">
-        <div><span className="eyebrow">Search results</span><h2>{results.length} students found</h2></div>
+        <div><span className="eyebrow">Search results</span><h2>{loading ? 'Loading students…' : loadError ? 'Students unavailable' : `${results.length} students found`}</h2></div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className="secondary-button" onClick={() => window.print()}><Printer size={16} /> Print List</button>
           <button type="button" className="secondary-button" onClick={exportData}><Download size={16} /> Export Data</button>
@@ -236,7 +236,7 @@ export function StudentSearch({ students, onToast, onRefresh }: { students: Stud
         </div>
       </div>
 
-      <div className="panel roster-panel"><StudentResultsTable students={results} onAction={handleRowAction} /></div>
+      <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <StudentResultsTable students={results} onAction={handleRowAction} />}</div>
 
       {noticeOpen && <NoticeModal language={noticeLanguage} templates={templates} students={results} onClose={() => setNoticeOpen(false)} onTemplateSaved={reloadTemplates} onToast={onToast} onPrint={() => { window.print(); onToast(`${noticeLanguage} notice sent to print`); }} />}
       {editingStudent && <StudentAdmissionEditor key={editingStudent.id} student={editingStudent} onClose={() => setEditingStudent(null)} onSaved={onRefresh} onToast={onToast} />}

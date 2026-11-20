@@ -29,18 +29,18 @@ import { SCHOOL_NAME } from '@/lib/noticeText';
 import { StudentSearch } from '@/components/StudentSearch';
 import { OtherInformation } from '@/components/OtherInformation';
 import type { AdmissionFormState, InformationRecord, NoticeTemplate, Student } from '@/lib/schoolTypes';
-import { toStudentFeePayload, validateFeeFields } from '@/lib/admissionFees';
+import { validateFeeFields } from '@/lib/admissionFees';
 import { AdmissionForm } from '@/components/AdmissionForm';
 import type { InformationDraft } from '@/components/InformationRecords';
-import { admissionNumberExists, createAdmissionForm, fetchNextAdmissionNumber } from '@/lib/admissionFormState';
+import { createAdmissionForm, fetchNextAdmissionNumber } from '@/lib/admissionFormState';
 import { AuthProvider, useAuth, type UserRole } from '@/lib/auth';
+import { SchoolDataProvider, useSchoolData, type Attendance } from '@/lib/schoolData';
 import { AuthPage } from '@/components/AuthPage';
 import { AdminPanel } from '@/components/AdminPanel';
 import { SectionManager } from '@/components/SectionManager';
 import { AttendanceManager } from '@/components/AttendanceManager';
 import { ParentDashboard, TeacherDashboard } from '@/components/RoleDashboards';
 
-type Attendance = { student_id: string; status: 'present' | 'absent' | 'late' | 'excused' };
 type View = 'dashboard' | 'students' | 'admission' | 'sections' | 'attendance' | 'sms' | 'promotions' | 'withdrawals' | 'certificates' | 'other' | 'reports' | 'settings' | 'users';
 
 const adminNavItems: { label: string; icon: typeof LayoutDashboard; view: View }[] = [
@@ -79,37 +79,18 @@ const moduleCards: { title: string; description: string; icon: typeof UserPlus; 
 ];
 
 function App() {
-  return <AuthProvider><AppInner /></AuthProvider>;
+  return <AuthProvider><SchoolDataProvider><AppInner /></SchoolDataProvider></AuthProvider>;
 }
 
 function AppInner() {
   const { profile, loading: authLoading, signOut } = useAuth();
+  const { students, attendance, loading, error: dataError, refresh, addStudent: addStudentRecord } = useSchoolData();
   const [view, setView] = useState<View>('dashboard');
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<Attendance[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState('');
   const [showProfile, setShowProfile] = useState(false);
 
-  const loadSchoolData = async () => {
-    setLoading(true);
-    const [{ data: studentRows, error: studentError }, { data: attendanceRows, error: attendanceError }] = await Promise.all([
-      supabase.from('school_students').select('id, admission_number, admission_date, date_of_birth, admitted_in_class, full_name, student_name_prefix, father_name_prefix, mother_name, gender, class_name, section_name, guardian_name, guardian_phone, fathers_name, fathers_cnic, student_form_b, last_school, last_class, subject_group, place_of_birth, photo_url, roll_number, mother_number, religion, house, student_group, area, mother_tongue, nationality, data_source, clearance_status, fee_balance, status, current_address, permanent_address, father_contact_number, messaging_number, father_profession, guardian_relationship, guardian_cnic, whatsapp_number, tuition_fee, fee_concession_percentage, fee_concession_amount, fine_exempt, full_name_urdu, fathers_name_urdu, mother_name_urdu, leaving_date, leaving_reason, leaving_remarks, leaving_status, leaving_class, progress, conduct, fee_paid_upto, leaving_certificate_number, leaving_certificate_date, submitted_b_form, submitted_previous_tc, submitted_birth_certificate, submitted_photos, submitted_other_docs, submitted_b_form_file, submitted_previous_tc_file, submitted_birth_certificate_file, submitted_photos_file, submitted_other_docs_file, issued_tc_number, issued_tc_date, issued_character_certificate, issued_migration_certificate, issued_other_docs, issued_dmc, issued_dmc_file, issued_provisional_certificate, issued_provisional_certificate_file, issued_original_certificate, issued_original_certificate_file, issued_birth_certificate, issued_birth_certificate_file, issued_character_certificate_file, issued_migration_certificate_file').order('full_name'),
-      supabase.from('school_attendance').select('student_id, status').eq('attendance_date', new Date().toISOString().slice(0, 10)),
-    ]);
-    if (studentError) {
-      setToast('Student records could not be loaded. Please refresh the page.');
-    } else if (studentRows) {
-      setStudents(studentRows as Student[]);
-    }
-    if (!attendanceError && attendanceRows) setAttendance(attendanceRows as Attendance[]);
-    setLoading(false);
-  };
-
-  // Records can only be read once the signed-in user is known, so load them
-  // when the profile becomes available instead of once on mount.
-  useEffect(() => { if (profile?.id) void loadSchoolData(); }, [profile?.id]);
+  useEffect(() => { if (dataError) setToast(dataError); }, [dataError]);
   useEffect(() => { if (toast) { const timer = window.setTimeout(() => setToast(''), 3000); return () => window.clearTimeout(timer); } }, [toast]);
 
   const counts = useMemo(() => ({
@@ -152,23 +133,10 @@ function AppInner() {
   const roleLabel = roleLabels[profile.role];
 
   const addStudent = async (student: AdmissionFormState, records: InformationRecord[]) => {
-    const admissionNumber = student.admission_number.trim();
-    if (!admissionNumber) { setToast('Please enter an admission number.'); return false; }
-    if (await admissionNumberExists(admissionNumber)) { setToast('This admission number is already in use. Please use a different one.'); return false; }
-    const { data, error } = await supabase.from('school_students').insert({ ...toStudentFeePayload({ ...student, admission_number: admissionNumber }), admission_date: student.admission_date || new Date().toISOString().slice(0, 10) }).select().maybeSingle();
-    if (error || !data) {
-      setToast(error?.message ? `The student could not be saved: ${error.message}` : 'The student could not be saved. Please check the admission number.');
-      return false;
-    }
-    const savedStudent = data as Student;
-    const { error: recordError } = records.length
-      ? await supabase.from('school_other_information').insert(records.map((record) => ({ student_id: savedStudent.id, information_type: record.information_type, notes: record.notes })))
-      : { error: null };
-    setStudents((current) => [...current.filter((item) => item.id !== savedStudent.id), savedStudent].sort((a, b) => a.full_name.localeCompare(b.full_name)));
-    setToast(recordError ? 'Student saved, but their other information could not be saved' : 'New student added to the roster');
-    navigate('students');
-    void loadSchoolData();
-    return true;
+    const result = await addStudentRecord(student, records);
+    setToast(result.message);
+    if (result.ok) navigate('students');
+    return result.ok;
   };
 
   if (profile.role === 'parent') {
@@ -206,7 +174,7 @@ function AppInner() {
 
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>{roleLabel} account</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{roleLabel} account</strong><span>{profile.full_name}</span><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
-        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onRefresh={loadSchoolData} onToast={setToast} />}
+        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onRefresh={refresh} onToast={setToast} loading={loading} loadError={dataError} />}
         {toast && <div className="toast"><Check size={17} /> {toast}</div>}
       </main>
     </div>
@@ -233,7 +201,7 @@ function Dashboard({ students, counts, loading, onNavigate }: { students: Studen
 function StatCard({ label, value, detail, tone, icon }: { label: string; value: string; detail: string; tone: string; icon: ReactNode }) { return <div className={`stat-card ${tone}`}><div className="stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>; }
 function LegendDot({ color, label, value }: { color: string; label: string; value: number }) { return <div className="legend-item"><i className={color} /><span>{label}</span><strong>{value}</strong></div>; }
 
-function ModuleView({ view, title, students, filteredStudents, attendance, searchTerm, setSearchTerm, onAddStudent, onRefresh, onToast }: { view: View; title: string; students: Student[]; filteredStudents: Student[]; attendance: Attendance[]; searchTerm: string; setSearchTerm: (value: string) => void; onAddStudent: (student: AdmissionFormState, records: InformationRecord[]) => Promise<boolean>; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
+function ModuleView({ view, title, students, filteredStudents, attendance, loading, loadError, searchTerm, setSearchTerm, onAddStudent, onRefresh, onToast }: { view: View; title: string; students: Student[]; filteredStudents: Student[]; attendance: Attendance[]; loading: boolean; loadError: string | null; searchTerm: string; setSearchTerm: (value: string) => void; onAddStudent: (student: AdmissionFormState, records: InformationRecord[]) => Promise<boolean>; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
   const [formOpen, setFormOpen] = useState(view === 'admission');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [form, setForm] = useState<AdmissionFormState>(() => createAdmissionForm(students));
@@ -258,7 +226,7 @@ function ModuleView({ view, title, students, filteredStudents, attendance, searc
   const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely note to guardians of absent students.', promotions: 'Prepare next year’s class lists with confidence.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
   return <div className="page module-page"><div className="module-heading"><div><span className="eyebrow">School workspace</span><h1>{title}</h1><p>{pageDescription[view]}</p></div>{view === 'students' && <button className="primary-button" onClick={() => setFormOpen(true)}><Plus size={18} /> New admission</button>}{actionLabel && <button className="primary-button" onClick={() => onToast(`${selectedIds.length || 'No'} students selected — ready for the next step`)}><Send size={17} /> {actionLabel}</button>}</div>
     {view === 'admission' || (view === 'students' && formOpen) ? <AdmissionForm form={form} setForm={setForm} infoRecords={infoRecords} onSaveInfo={saveInfoRecord} onDeleteInfo={deleteInfoRecord} onClear={clearAdmission} onSubmit={submitAdmission} onAddToSession={addToSession} onCancel={() => setFormOpen(false)} onToast={onToast} onAutoGenerate={() => { void (async () => { const number = await fetchNextAdmissionNumber(); setForm({ ...form, admission_number: number }); onToast(`Admission number ${number} generated`); })(); }} /> : null}
-    {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : ['sms', 'promotions', 'withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel"><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></div>}
+    {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} loading={loading} loadError={loadError} onToast={onToast} onRefresh={onRefresh} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : ['sms', 'promotions', 'withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></>}</div>}
   </div>;
 }
 
