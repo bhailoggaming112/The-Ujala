@@ -160,7 +160,7 @@ button { cursor: pointer; }
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
     box-sizing: border-box;
   }
 
@@ -182,7 +182,13 @@ button { cursor: pointer; }
   }
   .print-admission-sheet .print-header-copy { flex: 1; }
 
-  .print-admission-sheet .print-layout { flex: 1; gap: 16px; margin-bottom: 16px; }
+  /* Top row: photo on the left, Admission Info card spanning the rest. */
+  .print-admission-sheet .print-top {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
   .print-admission-sheet .print-photo { width: 118px; flex: 0 0 118px; }
   .print-admission-sheet .print-photo img,
   .print-admission-sheet .print-photo .print-photo-img {
@@ -199,11 +205,12 @@ button { cursor: pointer; }
   }
   .print-admission-sheet .print-photo strong { font-size: 11px; line-height: 1.35; color: #132a3a; }
 
-  .print-admission-sheet .print-columns { gap: 14px; }
   .print-admission-sheet .print-card {
     border: 1px solid #c3d0d8;
     border-radius: 8px;
     padding: 12px 14px;
+    box-sizing: border-box;
+    overflow: hidden;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -216,14 +223,47 @@ button { cursor: pointer; }
     letter-spacing: 1.1px;
     color: #2f6d86;
   }
+
+  /* Two columns inside the Admission Info card so it stays level with the photo
+     and the last field never spills past the border. */
+  .print-admission-sheet .print-card-admission {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 20px;
+    align-content: start;
+  }
+  .print-admission-sheet .print-card-admission h2 { grid-column: 1 / -1; }
+
+  /* Full-width Other Info card below, fields in a clean two-column grid.
+     It grows to fill the middle of the sheet so the page never looks empty. */
+  .print-admission-sheet .print-card-other {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+  }
+  .print-admission-sheet .print-other-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 20px;
+    row-gap: 0;
+    align-content: space-between;
+  }
+
   .print-admission-sheet .print-row {
     border-bottom: 0;
-    padding: 3.5px 0;
+    padding: 7px 0;
     font-size: 10.5px;
     align-items: baseline;
+    min-width: 0;
   }
   .print-admission-sheet .print-row-label { color: #5a6b76; font-weight: 600; }
-  .print-admission-sheet .print-row-value { color: #132a3a; font-weight: 600; }
+  .print-admission-sheet .print-row-value { color: #132a3a; font-weight: 600; word-break: break-word; }
 
   .print-admission-sheet .print-foot {
     display: grid;
@@ -263,6 +303,11 @@ button { cursor: pointer; }
     letter-spacing: .8px;
     color: #5a6b76;
     font-weight: 700;
+  }
+
+  .print-admission-sheet .print-sign-space {
+    flex: 1 1 22mm;
+    min-height: 18mm;
   }
 
   .print-admission-sheet .print-signatures {

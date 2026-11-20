@@ -83,47 +83,48 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
         </div>
       </header>
 
-      <div className="print-layout">
+      <div className="print-top">
         <div className="print-photo">
           {form.photo_url ? <img src={form.photo_url} alt="Student" /> : <div className="print-photo-empty">Photo</div>}
           <strong>{printName(form.student_name_prefix, form.full_name) || 'Student name'}</strong>
         </div>
-        <div className="print-columns">
-          <section className="print-card">
-            <h2>Admission Info</h2>
-            {printRows([
-              ['Admission No.', form.admission_number],
-              ['Admission Date', form.admission_date],
-              ['Admitted in Class', form.admitted_in_class],
-              ['Current Class', form.class_name],
-              ['Section', form.section_name],
-              ['Date of Birth', form.date_of_birth],
-              ['Gender', form.gender],
-              ['Student Name', printName(form.student_name_prefix, form.full_name)],
-              ['Father Name', printName(form.father_name_prefix, form.fathers_name)],
-              ['Mother Name', form.mother_name],
-              ['Guardian Name', form.guardian_name],
-              ['Guardian Phone', form.guardian_phone],
-            ])}
-          </section>
-          <section className="print-card">
-            <h2>Other Info</h2>
-            {printRows([
-              ['Father Contact No.', form.father_contact_number],
-              ['Messaging Number', form.messaging_number],
-              ['WhatsApp Number', form.whatsapp_number],
-              ['Current Address', form.current_address],
-              ['Permanent Address', form.permanent_address],
-              ['Father’s Profession', form.father_profession],
-              ['Mother Tongue', form.mother_tongue],
-              ['Nationality', form.nationality],
-              ['Religion', form.religion],
-              ['Place of Birth', form.place_of_birth],
-              ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
-            ])}
-          </section>
-        </div>
+        <section className="print-card print-card-admission">
+          <h2>Admission Info</h2>
+          {printRows([
+            ['Admission No.', form.admission_number],
+            ['Admission Date', form.admission_date],
+            ['Admitted in Class', form.admitted_in_class],
+            ['Current Class', form.class_name],
+            ['Section', form.section_name],
+            ['Date of Birth', form.date_of_birth],
+            ['Gender', form.gender],
+            ['Student Name', printName(form.student_name_prefix, form.full_name)],
+            ['Father Name', printName(form.father_name_prefix, form.fathers_name)],
+            ['Mother Name', form.mother_name],
+            ['Guardian Name', form.guardian_name],
+            ['Guardian Phone', form.guardian_phone],
+          ])}
+        </section>
       </div>
+
+      <section className="print-card print-card-other">
+        <h2>Other Info</h2>
+        <div className="print-other-grid">
+          {printRows([
+            ['Father Contact No.', form.father_contact_number],
+            ['Messaging Number', form.messaging_number],
+            ['WhatsApp Number', form.whatsapp_number],
+            ['Current Address', form.current_address],
+            ['Permanent Address', form.permanent_address],
+            ['Father’s Profession', form.father_profession],
+            ['Mother Tongue', form.mother_tongue],
+            ['Nationality', form.nationality],
+            ['Religion', form.religion],
+            ['Place of Birth', form.place_of_birth],
+            ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
+          ])}
+        </div>
+      </section>
 
       <div className="print-foot">
         <section className="print-declaration">
@@ -144,6 +145,8 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
           </div>
         </section>
       </div>
+
+      <div className="print-sign-space" aria-hidden="true" />
 
       <div className="print-signatures">
         <div className="print-signature"><span>Parent / Guardian Signature</span></div>
