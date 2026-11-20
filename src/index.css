@@ -148,7 +148,8 @@ button { cursor: pointer; }
      the bottom edge, so nothing spills onto a second page. */
   .print-sheet-root .print-only.print-admission-sheet {
     height: 277mm !important;
-    overflow: hidden;
+    max-height: 277mm !important;
+    overflow: hidden !important;
     break-inside: avoid;
     page-break-inside: avoid;
     page-break-after: avoid;
@@ -240,8 +241,7 @@ button { cursor: pointer; }
      It grows to fill the middle of the sheet so the page never looks empty. */
   .print-admission-sheet .print-card-other {
     width: 100%;
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     margin-bottom: 14px;
@@ -306,8 +306,8 @@ button { cursor: pointer; }
   }
 
   .print-admission-sheet .print-sign-space {
-    flex: 1 1 22mm;
-    min-height: 18mm;
+    flex: 1 1 auto;
+    min-height: 10mm;
   }
 
   .print-admission-sheet .print-signatures {
