@@ -1,13 +1,35 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
-  AlertCircle, Ban, Check, KeyRound, Loader2, Plus, Search, Shield, Trash2, UserPlus, Users, X,
+  AlertCircle, Ban, Check, KeyRound, Loader2, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth, type UserProfile, type UserRole } from '@/lib/auth';
 import type { Student } from '@/lib/schoolTypes';
+import { PasswordField } from '@/components/PasswordField';
+import { CredentialsModal } from '@/components/CredentialsModal';
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
+import {
+  fetchPasswordRequests,
+  generatePassword,
+  provisionPortalAccount,
+  resolvePasswordRequest,
+  setAccountPassword,
+  usernameFromMobile,
+  type PasswordRequest,
+  type PortalCredentials,
+} from '@/lib/portalAccounts';
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Admin',
+  teacher: 'Teacher',
+  parent: 'Parent',
+  office_assistant: 'Office Assistant',
+  accountant: 'Accountant',
+  student: 'Student',
+};
 
 export function AdminPanel({ onToast }: { onToast: (message: string) => void }) {
-  const { profile, createUser } = useAuth();
+  const { profile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -16,16 +38,26 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
   const [showPassword, setShowPassword] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [links, setLinks] = useState<Record<string, string[]>>({});
+  const [studentUsernames, setStudentUsernames] = useState<Record<string, string>>({});
+  const [resetTarget, setResetTarget] = useState<UserProfile | null>(null);
+  const [credentials, setCredentials] = useState<PortalCredentials[] | null>(null);
+  const [requests, setRequests] = useState<PasswordRequest[]>([]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('id, username, full_name, role, status, created_at')
+      .select('id, username, full_name, role, status, student_id, created_at')
       .order('created_at', { ascending: false });
-    if (!error && data) setUsers(data as UserProfile[]);
+    if (!error && data) {
+      const rows = data as (UserProfile & { student_id: string | null })[];
+      setUsers(rows);
+      const map: Record<string, string> = {};
+      for (const row of rows) if (row.student_id) map[row.student_id] = row.username;
+      setStudentUsernames(map);
+    }
     setLoading(false);
-  };
+  }, []);
 
   const loadStudents = async () => {
     const { data } = await supabase
@@ -49,19 +81,39 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
     }
   };
 
-  useEffect(() => { void loadUsers(); void loadStudents(); void loadLinks(); }, []);
+  const loadRequests = useCallback(async () => {
+    setRequests(await fetchPasswordRequests());
+  }, []);
+
+  useEffect(() => {
+    void loadUsers();
+    void loadStudents();
+    void loadLinks();
+    void loadRequests();
+  }, [loadUsers, loadRequests]);
 
   const filtered = users.filter((u) =>
-    `${u.full_name} ${u.role}`.toLowerCase().includes(search.toLowerCase()),
+    `${u.full_name} ${u.username} ${ROLE_LABELS[u.role]}`.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const pendingRequests = requests.filter((request) => request.status === 'pending');
 
   const toggleSuspend = async (user: UserProfile) => {
     const newStatus = user.status === 'active' ? 'suspended' : 'active';
-    const { error } = await supabase
-      .from('user_profiles')
-      .update({ status: newStatus })
-      .eq('id', user.id);
-    if (error) { onToast('Could not update account status.'); return; }
+    const { error } = await supabase.rpc('admin_set_account_status', {
+      p_user_id: user.id,
+      p_status: newStatus,
+    });
+    if (error) {
+      onToast(
+        error.message === 'You cannot suspend your own account'
+          ? 'You cannot suspend your own account.'
+          : error.message === 'The last administrator account cannot be suspended'
+            ? 'The last administrator account cannot be suspended.'
+            : 'Could not update account status.',
+      );
+      return;
+    }
     setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u)));
     onToast(`${user.full_name} has been ${newStatus === 'suspended' ? 'suspended' : 'reactivated'}.`);
   };
@@ -73,10 +125,15 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
     onToast(`${user.full_name}'s account was removed.`);
   };
 
-  const roleBadge = (role: UserRole) => {
-    const labels: Record<UserRole, string> = { admin: 'Admin', teacher: 'Teacher', parent: 'Parent', office_assistant: 'Office Assistant', accountant: 'Accountant' };
-    return labels[role];
+  const dismissRequest = async (request: PasswordRequest) => {
+    if (!profile) return;
+    const { error } = await resolvePasswordRequest(request.id, profile.id);
+    if (error) { onToast(error); return; }
+    setRequests((prev) => prev.map((item) => (item.id === request.id ? { ...item, status: 'resolved' } : item)));
+    onToast(`Request from ${request.username} marked as handled.`);
   };
+
+  const accountsWithoutLogin = students.filter((student) => !studentUsernames[student.id]);
 
   return (
     <div className="admin-panel">
@@ -84,14 +141,14 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
         <div>
           <span className="eyebrow">Administration</span>
           <h2>User accounts</h2>
-          <p>Create, suspend, or remove Admin, Teacher, Parent, Office Assistant, and Accountant accounts. Link parents to their children.</p>
+          <p>Create, suspend, or remove portal accounts. Students and teachers receive their logins automatically.</p>
         </div>
         <div className="admin-header-actions">
           <button className="secondary-button" onClick={() => setShowLink(true)}>
             <Plus size={16} /> Link parent to student
           </button>
           <button className="secondary-button" onClick={() => setShowPassword(true)}>
-            <KeyRound size={16} /> Change password
+            <KeyRound size={16} /> Change my password
           </button>
           <button className="primary-button" onClick={() => setShowCreate(true)}>
             <UserPlus size={17} /> New account
@@ -104,16 +161,56 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
         <div className="admin-stat admin-stat-admin"><Shield size={20} /><strong>{users.filter((u) => u.role === 'admin').length}</strong><span>Administrators</span></div>
         <div className="admin-stat admin-stat-teacher"><strong>{users.filter((u) => u.role === 'teacher').length}</strong><span>Teachers</span></div>
         <div className="admin-stat admin-stat-parent"><strong>{users.filter((u) => u.role === 'parent').length}</strong><span>Parents</span></div>
+        <div className="admin-stat admin-stat-student"><strong>{users.filter((u) => u.role === 'student').length}</strong><span>Students</span></div>
         <div className="admin-stat admin-stat-assistant"><strong>{users.filter((u) => u.role === 'office_assistant').length}</strong><span>Office Assistants</span></div>
         <div className="admin-stat admin-stat-accountant"><strong>{users.filter((u) => u.role === 'accountant').length}</strong><span>Accountants</span></div>
         <div className="admin-stat admin-stat-suspended"><Ban size={20} /><strong>{users.filter((u) => u.status === 'suspended').length}</strong><span>Suspended</span></div>
       </div>
 
+      {pendingRequests.length > 0 && (
+        <section className="panel reset-requests">
+          <div className="reset-requests-heading">
+            <div>
+              <span className="eyebrow"><KeyRound size={14} /> Password help</span>
+              <h2>{pendingRequests.length} password reset {pendingRequests.length === 1 ? 'request' : 'requests'}</h2>
+              <p>These people could not sign in and asked for help. Reset their password, then mark the request handled.</p>
+            </div>
+          </div>
+          <div className="reset-request-list">
+            {pendingRequests.map((request) => {
+              const match = users.find((user) => user.username === request.username);
+              return (
+                <div className="reset-request-row" key={request.id}>
+                  <div className="reset-request-who">
+                    <strong>{match?.full_name ?? request.username}</strong>
+                    <span>
+                      Username: {request.username}
+                      {match ? ` · ${ROLE_LABELS[match.role]}` : ' · no matching account'}
+                    </span>
+                    {request.note && <small>{request.note}</small>}
+                  </div>
+                  <div className="reset-request-actions">
+                    {match && (
+                      <button className="secondary-button" onClick={() => setResetTarget(match)}>
+                        <KeyRound size={15} /> Set new password
+                      </button>
+                    )}
+                    <button className="secondary-button" onClick={() => void dismissRequest(request)}>
+                      <Check size={15} /> Mark handled
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="panel roster-panel">
         <div className="table-toolbar">
           <div className="search-field">
             <Search size={18} />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or role" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, username or role" />
           </div>
           <span className="result-count">{filtered.length} accounts</span>
         </div>
@@ -132,7 +229,7 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
                     </div>
                   </td>
                   <td className="muted-cell">{u.username}</td>
-                  <td><span className={`role-badge role-${u.role}`}>{roleBadge(u.role)}</span></td>
+                  <td><span className={`role-badge role-${u.role}`}>{ROLE_LABELS[u.role]}</span></td>
                   <td>
                     <span className={`status-pill ${u.status === 'suspended' ? 'status-suspended' : ''}`}>
                       {u.status === 'active' ? 'Active' : 'Suspended'}
@@ -145,6 +242,15 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
                     <div className="row-actions">
                       {u.id !== profile?.id && (
                         <>
+                          {u.role !== 'admin' && (
+                            <button
+                              className="row-action-btn"
+                              onClick={() => setResetTarget(u)}
+                              title="Set a new password"
+                            >
+                              <KeyRound size={15} />
+                            </button>
+                          )}
                           <button
                             className="row-action-btn"
                             onClick={() => void toggleSuspend(u)}
@@ -182,16 +288,24 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
 
       {showCreate && (
         <CreateUserModal
+          students={accountsWithoutLogin}
           onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); void loadUsers(); }}
+          onCreated={(created) => { setShowCreate(false); void loadUsers(); setCredentials(created); }}
           onToast={onToast}
         />
       )}
       {showPassword && (
-        <ChangePasswordModal
-          onClose={() => setShowPassword(false)}
+        <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={onToast} />
+      )}
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
           onToast={onToast}
         />
+      )}
+      {credentials && (
+        <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />
       )}
       {showLink && (
         <LinkParentModal
@@ -207,32 +321,43 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
   );
 }
 
-function CreateUserModal({ onClose, onCreated, onToast }: {
+function CreateUserModal({ students, onClose, onCreated, onToast }: {
+  students: Student[];
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (credentials: PortalCredentials[]) => void;
   onToast: (message: string) => void;
 }) {
-  const { createUser } = useAuth();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [password, setPassword] = useState(() => generatePassword());
   const [role, setRole] = useState<UserRole>('teacher');
+  const [studentId, setStudentId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const effectiveUsername = role === 'teacher' && mobile ? usernameFromMobile(mobile) : username;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
     setError('');
+    if (fullName.trim().length < 2) { setError('Please enter the full name.'); return; }
+    if (effectiveUsername.trim().length < 3) {
+      setError(role === 'teacher' ? 'Enter a mobile number with at least 3 digits.' : 'Username must be at least 3 characters.');
+      return;
+    }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    if (username.trim().length < 3) { setError('Username must be at least 3 characters.'); return; }
+    if (role === 'student' && !studentId) { setError('Choose the student this login belongs to.'); return; }
     setBusy(true);
 
-    const { error: createError } = await createUser(
-      username.trim().toLowerCase(),
+    const { error: createError } = await provisionPortalAccount({
+      username: effectiveUsername.trim().toLowerCase(),
       password,
-      fullName.trim(),
+      fullName: fullName.trim(),
       role,
-    );
+      studentId: role === 'student' ? studentId : null,
+      mobile: role === 'teacher' ? mobile.trim() : null,
+    });
 
     if (createError) {
       setError(createError);
@@ -240,8 +365,8 @@ function CreateUserModal({ onClose, onCreated, onToast }: {
       return;
     }
 
-    onToast(`${fullName.trim()} was created as ${role}. They can sign in with username "${username.trim().toLowerCase()}".`);
-    onCreated();
+    onToast(`${fullName.trim()} was created. Share the sign-in details shown next.`);
+    onCreated([{ username: effectiveUsername.trim().toLowerCase(), password, fullName: fullName.trim(), role }]);
   };
 
   return (
@@ -249,34 +374,128 @@ function CreateUserModal({ onClose, onCreated, onToast }: {
       <section className="notice-modal" onClick={(e) => e.stopPropagation()}>
         <div className="notice-preview-top">
           <span className="eyebrow"><UserPlus size={14} /> New account</span>
-          <button className="close-button" onClick={onClose}><X size={18} /></button>
+          <button className="close-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <h2 className="mt-3 text-lg font-bold text-slate-800">Create a new account</h2>
-        <p className="mt-1 text-sm text-slate-500">The new user will sign in with the username and password below.</p>
+        <p className="mt-1 text-sm text-slate-500">The new user signs in with the username and password below.</p>
         <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
           <label className="control-field">Full name
             <input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Enter full name" />
           </label>
-          <label className="control-field">Username
-            <input value={username} onChange={(e) => setUsername(e.target.value)} required placeholder="e.g. teacher1, parent.john" />
-          </label>
-          <label className="control-field">Temporary password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="At least 6 characters" />
-          </label>
+
           <label className="control-field">Account type
             <select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-              <option value="admin">Administrator</option>
               <option value="teacher">Teacher</option>
+              <option value="student">Student</option>
               <option value="parent">Parent</option>
+              <option value="admin">Administrator</option>
               <option value="office_assistant">Office Assistant</option>
               <option value="accountant">Accountant</option>
             </select>
           </label>
+
+          {role === 'teacher' ? (
+            <label className="control-field">Mobile number (used as the username)
+              <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="e.g. 03001234567" inputMode="tel" />
+            </label>
+          ) : null}
+
+          {role === 'student' ? (
+            <label className="control-field">Student record
+              <select value={studentId} onChange={(e) => {
+                setStudentId(e.target.value);
+                const picked = students.find((s) => s.id === e.target.value);
+                if (picked) setUsername(picked.admission_number.toLowerCase());
+              }}>
+                <option value="">Select the student</option>
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.full_name} · {student.admission_number} · {student.class_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <label className="control-field">
+            {role === 'teacher' ? 'Username (from mobile number)' : role === 'student' ? 'Username (admission number)' : 'Username'}
+            <input
+              value={effectiveUsername}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              readOnly={role === 'teacher' && Boolean(mobile)}
+              placeholder="e.g. teacher1, parent.john"
+            />
+          </label>
+
+          <label className="control-field">Password
+            <PasswordField value={password} onChange={setPassword} autoComplete="off" />
+          </label>
+
+          <button type="button" className="secondary-button self-start" onClick={() => setPassword(generatePassword())}>
+            <RefreshCw size={15} /> Generate a password
+          </button>
+
           {error && <div className="auth-error"><AlertCircle size={16} /><span>{error}</span></div>}
+
           <div className="notice-preview-actions">
             <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary-button" disabled={busy}>
               {busy ? <Loader2 size={16} className="auth-spinner" /> : <UserPlus size={16} />} Create account
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ResetPasswordModal({ user, onClose, onToast }: {
+  user: UserProfile;
+  onClose: () => void;
+  onToast: (message: string) => void;
+}) {
+  const [password, setPassword] = useState(() => generatePassword());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setBusy(true);
+
+    const { error: resetError } = await setAccountPassword(user.id, password);
+    if (resetError) { setError(resetError); setBusy(false); return; }
+
+    onToast(`A new password was set for ${user.full_name}.`);
+    onClose();
+  };
+
+  return (
+    <div className="notice-overlay" onClick={onClose}>
+      <section className="notice-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="notice-preview-top">
+          <span className="eyebrow"><KeyRound size={14} /> Reset password</span>
+          <button className="close-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        </div>
+        <h2 className="mt-3 text-lg font-bold text-slate-800">Set a new password</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {user.full_name} signs in with the username <strong>{user.username}</strong>. Setting a new password takes effect
+          immediately and replaces the old one.
+        </p>
+        <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
+          <label className="control-field">New password
+            <PasswordField value={password} onChange={setPassword} autoComplete="off" />
+          </label>
+          <button type="button" className="secondary-button self-start" onClick={() => setPassword(generatePassword())}>
+            <RefreshCw size={15} /> Generate a password
+          </button>
+          {error && <div className="auth-error"><AlertCircle size={16} /><span>{error}</span></div>}
+          <div className="notice-preview-actions">
+            <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-button" disabled={busy}>
+              {busy ? <Loader2 size={16} className="auth-spinner" /> : <KeyRound size={16} />} Set password
             </button>
           </div>
         </form>
@@ -331,7 +550,7 @@ function LinkParentModal({ users, students, existingLinks, onClose, onLinked, on
       <section className="notice-modal" onClick={(e) => e.stopPropagation()}>
         <div className="notice-preview-top">
           <span className="eyebrow"><Plus size={14} /> Link parent to student</span>
-          <button className="close-button" onClick={onClose}><X size={18} /></button>
+          <button className="close-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <h2 className="mt-3 text-lg font-bold text-slate-800">Manage parent-student links</h2>
         <p className="mt-1 text-sm text-slate-500">Select a parent, then check which students are their children. Parents will only see linked students.</p>
@@ -370,58 +589,6 @@ function LinkParentModal({ users, students, existingLinks, onClose, onLinked, on
             {busy ? <Loader2 size={16} className="auth-spinner" /> : <Check size={16} />} Save links
           </button>
         </div>
-      </section>
-    </div>
-  );
-}
-
-function ChangePasswordModal({ onClose, onToast }: {
-  onClose: () => void;
-  onToast: (message: string) => void;
-}) {
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (newPassword.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    if (newPassword !== confirmPassword) { setError('Passwords do not match.'); return; }
-    setBusy(true);
-
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-    if (updateError) { setError(updateError.message); setBusy(false); return; }
-
-    onToast('Your password has been updated.');
-    onClose();
-  };
-
-  return (
-    <div className="notice-overlay" onClick={onClose}>
-      <section className="notice-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="notice-preview-top">
-          <span className="eyebrow"><KeyRound size={14} /> Change password</span>
-          <button className="close-button" onClick={onClose}><X size={18} /></button>
-        </div>
-        <h2 className="mt-3 text-lg font-bold text-slate-800">Change your password</h2>
-        <p className="mt-1 text-sm text-slate-500">Choose a new password to replace the temporary one.</p>
-        <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
-          <label className="control-field">New password
-            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required placeholder="At least 6 characters" autoComplete="new-password" />
-          </label>
-          <label className="control-field">Confirm new password
-            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Re-enter the new password" autoComplete="new-password" />
-          </label>
-          {error && <div className="auth-error"><AlertCircle size={16} /><span>{error}</span></div>}
-          <div className="notice-preview-actions">
-            <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? <Loader2 size={16} className="auth-spinner" /> : <KeyRound size={16} />} Update password
-            </button>
-          </div>
-        </form>
       </section>
     </div>
   );

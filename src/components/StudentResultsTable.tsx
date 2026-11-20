@@ -1,12 +1,13 @@
 import type { Student } from '@/lib/schoolTypes';
-import { Eye, Plus, Printer, Trash2, Wallet } from 'lucide-react';
+import { Eye, KeyRound, Plus, Printer, Trash2, Wallet } from 'lucide-react';
 import { StudentPhoto } from '@/components/StudentPhoto';
 
-export type RowAction = 'fee' | 'view' | 'print' | 'delete' | 'add';
+export type RowAction = 'fee' | 'view' | 'print' | 'delete' | 'add' | 'login';
 
 const rowActions: { action: RowAction; label: string; icon: typeof Eye; tone: string }[] = [
   { action: 'fee', label: 'Fee', icon: Wallet, tone: 'text-sky-700 hover:bg-sky-50' },
   { action: 'view', label: 'View', icon: Eye, tone: 'text-slate-700 hover:bg-slate-100' },
+  { action: 'login', label: 'Login', icon: KeyRound, tone: 'text-teal-700 hover:bg-teal-50' },
   { action: 'print', label: 'Print', icon: Printer, tone: 'text-slate-700 hover:bg-slate-100' },
   { action: 'delete', label: 'Delete', icon: Trash2, tone: 'text-rose-600 hover:bg-rose-50' },
   { action: 'add', label: 'Add', icon: Plus, tone: 'text-emerald-700 hover:bg-emerald-50' },

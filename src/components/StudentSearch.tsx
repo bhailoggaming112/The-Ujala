@@ -9,6 +9,8 @@ import { NoticeModal } from '@/components/NoticeModal';
 import { StudentRecordModal } from '@/components/StudentRecordModal';
 import { StudentResultsTable, type RowAction } from '@/components/StudentResultsTable';
 import { StudentAdmissionEditor } from '@/components/StudentAdmissionEditor';
+import { StudentLoginModal } from '@/components/StudentLoginModal';
+import type { PortalCredentials } from '@/lib/portalAccounts';
 
 type SearchFilters = {
   admission_number: string;
@@ -54,10 +56,11 @@ type ActiveModal =
   | { kind: 'feeDetails'; student: Student }
   | { kind: 'fee'; student: Student; mode: 'payment' | 'charge' }
   | { kind: 'record'; student: Student; autoPrint: boolean }
+  | { kind: 'login'; student: Student }
   | { kind: 'delete'; student: Student }
   | null;
 
-export function StudentSearch({ students, loading = false, loadError = null, onToast, onRefresh }: { students: Student[]; loading?: boolean; loadError?: string | null; onToast: (message: string) => void; onRefresh: () => Promise<void> }) {
+export function StudentSearch({ students, loading = false, loadError = null, onToast, onRefresh, onCreatedLogin }: { students: Student[]; loading?: boolean; loadError?: string | null; onToast: (message: string) => void; onRefresh: () => Promise<void>; onCreatedLogin: (items: PortalCredentials[]) => void }) {
   const [draft, setDraft] = useState<SearchFilters>(emptySearchFilters);
   const [applied, setApplied] = useState<SearchFilters>(emptySearchFilters);
   const [showAdvanced, setShowAdvanced] = useState(true);
@@ -67,6 +70,20 @@ export function StudentSearch({ students, loading = false, loadError = null, onT
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [logins, setLogins] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    supabase
+      .from('user_profiles')
+      .select('id, username, student_id')
+      .not('student_id', 'is', null)
+      .then(({ data }) => {
+        if (!data) return;
+        const map: Record<string, string> = {};
+        for (const row of data as { student_id: string; username: string }[]) map[row.student_id] = row.username;
+        setLogins(map);
+      });
+  }, []);
 
   const reloadTemplates = () => { void supabase.from('school_notice_templates').select('id, notice_type, language, template_text, updated_at').then(({ data }) => { if (data) setTemplates(data as NoticeTemplate[]); }); };
   useEffect(reloadTemplates, []);
@@ -99,6 +116,7 @@ export function StudentSearch({ students, loading = false, loadError = null, onT
     if (action === 'add') setActiveModal({ kind: 'fee', student, mode: 'charge' });
     if (action === 'view') setEditingStudent(student);
     if (action === 'print') setActiveModal({ kind: 'record', student, autoPrint: true });
+    if (action === 'login') setActiveModal({ kind: 'login', student });
     if (action === 'delete') setActiveModal({ kind: 'delete', student });
   };
 
@@ -243,6 +261,16 @@ export function StudentSearch({ students, loading = false, loadError = null, onT
       {activeModal?.kind === 'feeDetails' && <FeeDetailsModal student={activeModal.student} onClose={() => setActiveModal(null)} onRecord={(mode) => setActiveModal({ kind: 'fee', student: activeModal.student, mode })} />}
       {activeModal?.kind === 'fee' && <FeeModal student={activeModal.student} initialMode={activeModal.mode} onClose={() => setActiveModal(null)} onSaved={async (message) => { onToast(message); await onRefresh(); }} />}
       {activeModal?.kind === 'record' && <StudentRecordModal student={activeModal.student} autoPrint={activeModal.autoPrint} onClose={() => setActiveModal(null)} />}
+      {activeModal?.kind === 'login' && (
+        <StudentLoginModal
+          student={activeModal.student}
+          existingUsername={logins[activeModal.student.id] ?? null}
+          onClose={() => setActiveModal(null)}
+          onCreated={(username) => setLogins((current) => ({ ...current, [activeModal.student.id]: username }))}
+          onCreatedLogin={onCreatedLogin}
+          onToast={onToast}
+        />
+      )}
       {activeModal?.kind === 'delete' && (
         <div className="notice-overlay">
           <section className="notice-preview">

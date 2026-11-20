@@ -91,4 +91,53 @@
   .admin-header { flex-direction: column; align-items: stretch; }
   .admin-header-actions { flex-direction: column; }
   .admin-header-actions button { width: 100%; justify-content: center; }
+  .reset-request-row { flex-direction: column; align-items: stretch; }
+  .reset-request-actions button { width: 100%; justify-content: center; }
+  .credential-row { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
+
+/* Password visibility toggle */
+.password-field { display: flex; align-items: center; gap: 8px; width: 100%; }
+.password-field input { flex: 1; min-width: 0; }
+.password-toggle { border: 0; background: none; color: #8ba3b0; cursor: pointer; display: flex; align-items: center; padding: 3px; border-radius: 7px; transition: color .18s ease, background .18s ease; flex-shrink: 0; }
+.password-toggle:hover { color: #2f7f9d; background: #eef7fa; }
+.password-toggle:focus-visible { outline: 2px solid #71bfd4; outline-offset: 1px; }
+.auth-input-wrap .password-field { flex: 1; }
+.auth-input-wrap .password-field input { border: 0; outline: 0; background: transparent; font-size: 13px; color: #405a6b; }
+.control-field .password-field { border: 1px solid #dfe9ed; border-radius: 10px; padding: 11px 13px; background: #fcfefe; transition: .2s ease; }
+.control-field .password-field:focus-within { border-color: #71bfd4; box-shadow: 0 0 0 3px #dff4f8; }
+.control-field .password-field input { border: 0; outline: 0; background: transparent; font-size: 13px; color: #405a6b; }
+
+/* Login screen: extra panels */
+.auth-switch-inline { align-self: flex-end; margin-top: -6px; }
+.auth-switch { display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+.auth-panel-note { color: #8598a4; font-size: 12px; line-height: 1.55; margin: 0; }
+.auth-success { display: flex; align-items: flex-start; gap: 8px; background: #eefaf3; border: 1px solid #b9e6cd; color: #2c7a55; border-radius: 10px; padding: 11px 13px; font-size: 12px; line-height: 1.5; }
+.auth-success svg { flex-shrink: 0; margin-top: 1px; }
+
+/* Admin: password reset requests */
+.reset-requests { display: flex; flex-direction: column; gap: 14px; }
+.reset-requests-heading h2 { font: 700 18px 'Plus Jakarta Sans'; color: #30485b; margin: 6px 0 4px; }
+.reset-requests-heading p { color: #8598a4; font-size: 12.5px; margin: 0; max-width: 560px; }
+.reset-request-list { display: flex; flex-direction: column; gap: 10px; }
+.reset-request-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid #e8eef2; border-radius: 12px; background: #fbfdfe; }
+.reset-request-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.reset-request-who strong { color: #33505f; font-size: 13.5px; }
+.reset-request-who span { color: #8598a4; font-size: 12px; }
+.reset-request-who small { color: #6f8794; font-size: 12px; font-style: italic; }
+.reset-request-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-stat-student { background: #f3fbfd; border-color: #cfeaf2; }
+.role-student { background: #e6f7f2; color: #1f7a5c; }
+.secondary-button.self-start { align-self: flex-start; }
+
+/* Issued sign-in details */
+.credentials-modal { max-width: 520px; }
+.credentials-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.credential-card { border: 1px solid #d8e8ee; border-radius: 12px; padding: 13px 15px; background: #f7fcfe; }
+.credential-card > strong { display: block; color: #2f5468; font-size: 13.5px; margin-bottom: 8px; }
+.credential-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 12.5px; }
+.credential-row > span:first-child { color: #8598a4; }
+.credential-row code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #1f6b86; background: #e8f5fa; border-radius: 6px; padding: 3px 9px; letter-spacing: .3px; }
+.credential-role { text-transform: capitalize; color: #3f5767; font-weight: 600; }
+.credentials-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; background: #fff8ec; border: 1px solid #f2ddb6; color: #8a6a2a; border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+.credentials-note svg { flex-shrink: 0; margin-top: 1px; }

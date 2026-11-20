@@ -7,7 +7,7 @@ import type { AdmissionFormState, InformationRecord, Student } from '@/lib/schoo
 
 export type Attendance = { student_id: string; status: 'present' | 'absent' | 'late' | 'excused' };
 
-export type AddStudentResult = { ok: boolean; message: string };
+export type AddStudentResult = { ok: boolean; message: string; student?: Student };
 
 type SchoolDataValue = {
   students: Student[];
@@ -118,7 +118,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
         ? await supabase.from('school_other_information').insert(records.map((record) => ({ student_id: savedStudent.id, information_type: record.information_type, notes: record.notes })))
         : { error: null };
 
-      return { ok: true, message: recordError ? 'Student saved, but their other information could not be saved' : 'New student added to the roster' };
+      return { ok: true, message: recordError ? 'Student saved, but their other information could not be saved' : 'New student added to the roster', student: savedStudent };
     } catch {
       return { ok: false, message: 'The student could not be saved because the school server could not be reached. Please try again.' };
     }

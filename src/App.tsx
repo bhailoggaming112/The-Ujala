@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FileBadge2,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MessageCircle,
@@ -34,12 +35,20 @@ import { AdmissionForm } from '@/components/AdmissionForm';
 import type { InformationDraft } from '@/components/InformationRecords';
 import { createAdmissionForm, fetchNextAdmissionNumber } from '@/lib/admissionFormState';
 import { AuthProvider, useAuth, type UserRole } from '@/lib/auth';
-import { SchoolDataProvider, useSchoolData, type Attendance } from '@/lib/schoolData';
+import { SchoolDataProvider, useSchoolData, type AddStudentResult, type Attendance } from '@/lib/schoolData';
 import { AuthPage } from '@/components/AuthPage';
 import { AdminPanel } from '@/components/AdminPanel';
 import { SectionManager } from '@/components/SectionManager';
 import { AttendanceManager } from '@/components/AttendanceManager';
-import { ParentDashboard, TeacherDashboard } from '@/components/RoleDashboards';
+import { ParentDashboard, StudentDashboard, TeacherDashboard } from '@/components/RoleDashboards';
+import { CredentialsModal } from '@/components/CredentialsModal';
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
+import {
+  generatePassword,
+  provisionPortalAccount,
+  usernameFromAdmissionNumber,
+  type PortalCredentials,
+} from '@/lib/portalAccounts';
 
 type View = 'dashboard' | 'students' | 'admission' | 'sections' | 'attendance' | 'sms' | 'promotions' | 'withdrawals' | 'certificates' | 'other' | 'reports' | 'settings' | 'users';
 
@@ -68,8 +77,6 @@ const teacherNavItems: { label: string; icon: typeof LayoutDashboard; view: View
   { label: 'Other Information', icon: BookOpenCheck, view: 'other' },
 ];
 
-const navItems = adminNavItems;
-
 const moduleCards: { title: string; description: string; icon: typeof UserPlus; tone: string; view: View }[] = [
   { title: 'Admissions', description: '7 new applications', icon: UserPlus, tone: 'sky', view: 'admission' },
   { title: 'Attendance', description: '94% present today', icon: CalendarCheck2, tone: 'mint', view: 'attendance' },
@@ -89,6 +96,10 @@ function AppInner() {
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState('');
   const [showProfile, setShowProfile] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [credentials, setCredentials] = useState<PortalCredentials[] | null>(null);
+
+  const addCredentials = (items: PortalCredentials[]) => setCredentials((prev) => [...(prev ?? []), ...items]);
 
   useEffect(() => { if (dataError) setToast(dataError); }, [dataError]);
   useEffect(() => { if (toast) { const timer = window.setTimeout(() => setToast(''), 3000); return () => window.clearTimeout(timer); } }, [toast]);
@@ -129,30 +140,35 @@ function AppInner() {
   const title = roleNavItems.find((item) => item.view === view)?.label ?? 'Dashboard';
 
   const initials = profile.full_name.split(' ').map((w) => w[0]).join('').slice(0, 2);
-  const roleLabels: Record<UserRole, string> = { admin: 'Administrator', teacher: 'Teacher', parent: 'Parent', office_assistant: 'Office Assistant', accountant: 'Accountant' };
+  const roleLabels: Record<UserRole, string> = { admin: 'Administrator', teacher: 'Teacher', parent: 'Parent', office_assistant: 'Office Assistant', accountant: 'Accountant', student: 'Student' };
   const roleLabel = roleLabels[profile.role];
 
   const addStudent = async (student: AdmissionFormState, records: InformationRecord[]) => {
     const result = await addStudentRecord(student, records);
     setToast(result.message);
     if (result.ok) navigate('students');
-    return result.ok;
+    return result;
   };
 
-  if (profile.role === 'parent') {
+  if (profile.role === 'parent' || profile.role === 'student') {
+    const isParent = profile.role === 'parent';
     return (
       <div className="app-shell">
         <aside className="sidebar">
           <div className="brand"><div className="brand-mark"><img src="/New_LOGO_Final.PNG" alt="SchoolDesk" /></div><span>School<span className="brand-accent">Desk</span></span></div>
           <div className="school-switcher"><div className="school-avatar">{initials}</div><div><strong>{profile.full_name}</strong><span>{roleLabel} account</span></div></div>
-          <p className="nav-label">Parent portal</p>
-          <nav><NavButton item={{ label: 'Dashboard', icon: LayoutDashboard, view: 'dashboard' }} active={view === 'dashboard'} onClick={navigate} /></nav>
+          <p className="nav-label">{isParent ? 'Parent portal' : 'Student portal'}</p>
+          <nav>
+            <NavButton item={{ label: 'Dashboard', icon: LayoutDashboard, view: 'dashboard' }} active={view === 'dashboard'} onClick={navigate} />
+            <button className="nav-button" onClick={() => setShowPassword(true)}><KeyRound size={18} /><span>Change password</span></button>
+          </nav>
           <div className="sidebar-footer"><button className="settings-link" onClick={() => void signOut()}><LogOut size={17} /> Sign out</button></div>
         </aside>
         <main className="main-content">
-          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Welcome</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{roleLabel} account</strong><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
-          <ParentDashboard onToast={setToast} />
+          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Welcome</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{roleLabel} account</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+          {isParent ? <ParentDashboard /> : <StudentDashboard onToast={setToast} />}
           {toast && <div className="toast"><Check size={17} /> {toast}</div>}
+          {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={setToast} />}
         </main>
       </div>
     );
@@ -173,15 +189,17 @@ function AppInner() {
       </aside>
 
       <main className="main-content">
-        <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>{roleLabel} account</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{roleLabel} account</strong><span>{profile.full_name}</span><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
-        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onRefresh={refresh} onToast={setToast} loading={loading} loadError={dataError} />}
+        <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>{roleLabel} account</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{roleLabel} account</strong><span>{profile.full_name}</span><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} loading={loading} loadError={dataError} />}
         {toast && <div className="toast"><Check size={17} /> {toast}</div>}
+        {credentials && <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />}
+        {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={setToast} />}
       </main>
     </div>
   );
 }
 
-function NavButton({ item, active, onClick }: { item: typeof navItems[number]; active: boolean; onClick: (view: View) => void }) {
+function NavButton({ item, active, onClick }: { item: typeof adminNavItems[number]; active: boolean; onClick: (view: View) => void }) {
   const Icon = item.icon;
   return <button className={`nav-button ${active ? 'active' : ''}`} onClick={() => onClick(item.view)}><Icon size={18} /><span>{item.label}</span>{item.view === 'sms' && <span className="nav-count">3</span>}</button>;
 }
@@ -201,7 +219,8 @@ function Dashboard({ students, counts, loading, onNavigate }: { students: Studen
 function StatCard({ label, value, detail, tone, icon }: { label: string; value: string; detail: string; tone: string; icon: ReactNode }) { return <div className={`stat-card ${tone}`}><div className="stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>; }
 function LegendDot({ color, label, value }: { color: string; label: string; value: number }) { return <div className="legend-item"><i className={color} /><span>{label}</span><strong>{value}</strong></div>; }
 
-function ModuleView({ view, title, students, filteredStudents, attendance, loading, loadError, searchTerm, setSearchTerm, onAddStudent, onRefresh, onToast }: { view: View; title: string; students: Student[]; filteredStudents: Student[]; attendance: Attendance[]; loading: boolean; loadError: string | null; searchTerm: string; setSearchTerm: (value: string) => void; onAddStudent: (student: AdmissionFormState, records: InformationRecord[]) => Promise<boolean>; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
+function ModuleView({ view, title, students, filteredStudents, attendance, loading, loadError, searchTerm, setSearchTerm, onAddStudent, onCreatedLogin, onRefresh, onToast }: { view: View; title: string; students: Student[]; filteredStudents: Student[]; attendance: Attendance[]; loading: boolean; loadError: string | null; searchTerm: string; setSearchTerm: (value: string) => void; onAddStudent: (student: AdmissionFormState, records: InformationRecord[]) => Promise<AddStudentResult>; onCreatedLogin: (items: PortalCredentials[]) => void; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
+  const { profile } = useAuth();
   const [formOpen, setFormOpen] = useState(view === 'admission');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [form, setForm] = useState<AdmissionFormState>(() => createAdmissionForm(students));
@@ -218,7 +237,35 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
     return true;
   };
   const clearAdmission = () => { setInfoRecords([]); setForm(createAdmissionForm(students)); };
-  const saveAdmission = async (record: AdmissionFormState) => { const feeError = validateFeeFields(record); if (feeError) { onToast(feeError); return; } if (!await onAddStudent(record, infoRecords)) return; setForm(createAdmissionForm(students)); setInfoRecords([]); setFormOpen(false); };
+  const saveAdmission = async (record: AdmissionFormState) => {
+    const feeError = validateFeeFields(record);
+    if (feeError) { onToast(feeError); return; }
+    const result = await onAddStudent(record, infoRecords);
+    if (!result.ok || !result.student) return;
+
+    // Every new student gets a portal login: username is their admission number.
+    // Only administrators may create logins, so teachers are skipped quietly.
+    const username = usernameFromAdmissionNumber(result.student.admission_number);
+    if (profile?.role === 'admin' && username.length >= 3) {
+      const password = generatePassword();
+      const { error } = await provisionPortalAccount({
+        username,
+        password,
+        fullName: result.student.full_name,
+        role: 'student',
+        studentId: result.student.id,
+      });
+      if (!error) {
+        onCreatedLogin([{ username, password, fullName: result.student.full_name, role: 'student' }]);
+      } else {
+        onToast(`Student saved. The portal login was not created: ${error}`);
+      }
+    }
+
+    setForm(createAdmissionForm(students));
+    setInfoRecords([]);
+    setFormOpen(false);
+  };
   const submitAdmission = async (event: FormEvent) => { event.preventDefault(); await saveAdmission(form); };
   const addToSession = async () => { await saveAdmission({ ...form, data_source: 'current_session' }); };
   const toggleSelected = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -226,7 +273,7 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
   const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely note to guardians of absent students.', promotions: 'Prepare next year’s class lists with confidence.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
   return <div className="page module-page"><div className="module-heading"><div><span className="eyebrow">School workspace</span><h1>{title}</h1><p>{pageDescription[view]}</p></div>{view === 'students' && <button className="primary-button" onClick={() => setFormOpen(true)}><Plus size={18} /> New admission</button>}{actionLabel && <button className="primary-button" onClick={() => onToast(`${selectedIds.length || 'No'} students selected — ready for the next step`)}><Send size={17} /> {actionLabel}</button>}</div>
     {view === 'admission' || (view === 'students' && formOpen) ? <AdmissionForm form={form} setForm={setForm} infoRecords={infoRecords} onSaveInfo={saveInfoRecord} onDeleteInfo={deleteInfoRecord} onClear={clearAdmission} onSubmit={submitAdmission} onAddToSession={addToSession} onCancel={() => setFormOpen(false)} onToast={onToast} onAutoGenerate={() => { void (async () => { const number = await fetchNextAdmissionNumber(); setForm({ ...form, admission_number: number }); onToast(`Admission number ${number} generated`); })(); }} /> : null}
-    {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} loading={loading} loadError={loadError} onToast={onToast} onRefresh={onRefresh} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : ['sms', 'promotions', 'withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></>}</div>}
+    {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} loading={loading} loadError={loadError} onToast={onToast} onRefresh={onRefresh} onCreatedLogin={onCreatedLogin} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : ['sms', 'promotions', 'withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></>}</div>}
   </div>;
 }
 

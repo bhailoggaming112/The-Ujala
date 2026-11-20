@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Student } from '@/lib/schoolTypes';
 
-export function ParentDashboard({ onToast }: { onToast: (message: string) => void }) {
+export function ParentDashboard() {
   const { profile } = useAuth();
   const [children, setChildren] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, { present: number; absent: number; late: number }>>({});
@@ -114,6 +114,155 @@ export function ParentDashboard({ onToast }: { onToast: (message: string) => voi
             </section>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+export function StudentDashboard({ onToast }: { onToast: (message: string) => void }) {
+  const { profile } = useAuth();
+  const [student, setStudent] = useState<Student | null>(null);
+  const [summary, setSummary] = useState<{ present: number; absent: number; late: number }>({ present: 0, absent: 0, late: 0 });
+  const [results, setResults] = useState<{ subject: string; obtained: number; total: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!profile) return;
+    let active = true;
+    (async () => {
+      try {
+        const { data: link } = await supabase
+          .from('user_profiles')
+          .select('student_id')
+          .eq('id', profile.id)
+          .maybeSingle();
+        const studentId = (link as { student_id: string | null } | null)?.student_id;
+        if (!active || !studentId) { setLoading(false); return; }
+
+        const [{ data: record }, { data: attendance }, { data: dmc }] = await Promise.all([
+          supabase
+            .from('school_students')
+            .select('id, admission_number, full_name, class_name, section_name, guardian_phone, fee_balance, status, photo_url')
+            .eq('id', studentId)
+            .maybeSingle(),
+          supabase.from('school_attendance').select('status').eq('student_id', studentId),
+          supabase
+            .from('school_dmc_records')
+            .select('attendance_percentage, remarks, term, session')
+            .eq('student_id', studentId)
+            .order('period_end', { ascending: false })
+            .limit(1),
+        ]);
+
+        if (!active) return;
+        setStudent(record as Student | null);
+
+        const counts = { present: 0, absent: 0, late: 0 };
+        for (const row of (attendance as { status: string }[]) ?? []) {
+          if (row.status in counts) counts[row.status as keyof typeof counts] += 1;
+        }
+        setSummary(counts);
+
+        const latest = ((dmc ?? []) as { attendance_percentage: number; remarks: string | null; term: string; session: string }[])[0];
+        if (latest?.remarks) {
+          setResults([{ subject: `${latest.term} ${latest.session}`, obtained: Number(latest.attendance_percentage), total: 100 }]);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [profile]);
+
+  if (loading) return <div className="page"><p className="empty-state large">Loading your record…</p></div>;
+
+  if (!student) {
+    return (
+      <div className="page parent-page">
+        <div className="module-heading">
+          <div>
+            <span className="eyebrow">Student portal</span>
+            <h1>Welcome, {profile?.full_name}</h1>
+            <p>Your record could not be found. Please contact the school office.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const total = summary.present + summary.absent + summary.late;
+  const percentage = total ? Math.round((summary.present / total) * 1000) / 10 : 0;
+
+  return (
+    <div className="page parent-page">
+      <div className="module-heading">
+        <div>
+          <span className="eyebrow">Student portal</span>
+          <h1>Welcome, {student.full_name}</h1>
+          <p>{student.class_name} · Section {student.section_name} · Admission no. {student.admission_number}</p>
+        </div>
+        <button className="secondary-button" onClick={() => onToast('Ask the school office to correct any detail that looks wrong.')}>
+          Request a correction
+        </button>
+      </div>
+
+      <div className="parent-children-grid">
+        <section className="panel parent-child-card">
+          <div className="parent-child-header">
+            <div className="student-avatar" style={{ width: '48px', height: '48px', fontSize: '14px' }}>
+              {student.full_name.split(' ').map((w) => w[0]).join('').slice(0, 2)}
+            </div>
+            <div>
+              <h3>{student.full_name}</h3>
+              <span>{student.class_name} · Section {student.section_name}</span>
+            </div>
+            <span className="status-pill">{student.status === 'active' ? 'Active' : student.status === 'promoted' ? 'Pass Out' : 'Inactive'}</span>
+          </div>
+
+          <div className="parent-child-stats">
+            <div className="parent-stat">
+              <CalendarCheck2 size={18} />
+              <div><strong>{percentage}%</strong><span>Attendance</span></div>
+            </div>
+            <div className="parent-stat">
+              <div><strong>{summary.present}</strong><span>Present</span></div>
+            </div>
+            <div className="parent-stat">
+              <div><strong>{summary.absent}</strong><span>Absent</span></div>
+            </div>
+            <div className="parent-stat">
+              <div><strong>{summary.late}</strong><span>Late</span></div>
+            </div>
+          </div>
+
+          <div className="parent-child-details">
+            <div className="parent-detail-row"><span>Admission no.</span><strong>{student.admission_number}</strong></div>
+            <div className="parent-detail-row"><span>Fee balance</span><strong>Rs. {Number(student.fee_balance ?? 0).toLocaleString()}</strong></div>
+            <div className="parent-detail-row"><span>Guardian phone</span><strong>{student.guardian_phone || '—'}</strong></div>
+          </div>
+        </section>
+
+        <section className="panel parent-child-card">
+          <div className="parent-child-header">
+            <div>
+              <h3>Marks certificate</h3>
+              <span>Your most recent result summary</span>
+            </div>
+            <FileBadge2 size={20} />
+          </div>
+          {results.length === 0 ? (
+            <p className="empty-state">No marks certificate has been issued yet. It will appear here once your teacher publishes it.</p>
+          ) : (
+            <div className="parent-child-details">
+              {results.map((row) => (
+                <div className="parent-detail-row" key={row.subject}>
+                  <span>{row.subject}</span>
+                  <strong>{row.obtained.toFixed(1)}%</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
