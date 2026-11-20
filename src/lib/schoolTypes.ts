@@ -96,6 +96,41 @@ export type FeeTransaction = {
   created_at: string;
 };
 
+export type SmsLogStatus = 'sent' | 'failed' | 'pending';
+
+export type SmsLogEntry = {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class_name: string | null;
+  section_name: string | null;
+  parent_phone: string | null;
+  message_type: string;
+  message_body: string | null;
+  status: SmsLogStatus;
+  provider_response: string | null;
+  attendance_date: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
+export type DmcRecord = {
+  id: string;
+  student_id: string;
+  term: string | null;
+  session: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  attendance_total: number;
+  attendance_present: number;
+  attendance_absent: number;
+  attendance_percentage: number;
+  attendance_manual: boolean;
+  remarks: string | null;
+  issued_date: string;
+  updated_at: string;
+};
+
 export type NoticeTemplate = {
   id?: string;
   notice_type: 'fee_clearance_reminder' | 'warning_notice';
