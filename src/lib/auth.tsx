@@ -38,13 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadProfile = async (userId: string): Promise<UserProfile | null> => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('id, username, full_name, role, status, created_at')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) return null;
-    return data as UserProfile | null;
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id, username, full_name, role, status, created_at')
+        .eq('id', userId)
+        .maybeSingle();
+      if (error) return null;
+      return data as UserProfile | null;
+    } catch {
+      return null;
+    }
   };
 
   const refreshProfile = async () => {
@@ -55,17 +59,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      if (s?.user?.id) {
-        loadProfile(s.user.id).then((p) => {
-          setProfile(p);
+    supabase.auth.getSession()
+      .then(({ data: { session: s } }) => {
+        setSession(s);
+        if (s?.user?.id) {
+          loadProfile(s.user.id).then((p) => {
+            setProfile(p);
+            setLoading(false);
+          });
+        } else {
           setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
+        }
+      })
+      .catch(() => setLoading(false));
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
@@ -85,16 +91,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (username: string, password: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(username),
-      password,
-    });
-    if (error) return { error: 'Invalid username or password.' };
-    return { error: null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: usernameToEmail(username),
+        password,
+      });
+      if (error) return { error: 'Invalid username or password.' };
+      return { error: null };
+    } catch {
+      return { error: 'Could not reach the school server. Check your connection and try again.' };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Session is cleared locally even when the server is unreachable.
+    }
     setProfile(null);
     setSession(null);
   };
@@ -106,25 +120,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<{ error: string | null }> => {
     const pseudoEmail = usernameToEmail(username);
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: pseudoEmail,
-      password,
-    });
+    try {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: pseudoEmail,
+        password,
+      });
 
-    if (signUpError) return { error: signUpError.message };
-    if (!signUpData.user) return { error: 'Account creation failed.' };
+      if (signUpError) return { error: signUpError.message };
+      if (!signUpData.user) return { error: 'Account creation failed.' };
 
-    const { error: rpcError } = await supabase.rpc('set_initial_admin', {
-      p_user_id: signUpData.user.id,
-      p_username: username,
-      p_full_name: fullName,
-    });
+      const { error: rpcError } = await supabase.rpc('set_initial_admin', {
+        p_user_id: signUpData.user.id,
+        p_username: username,
+        p_full_name: fullName,
+      });
 
-    if (rpcError) {
-      return { error: rpcError.message };
+      if (rpcError) {
+        return { error: rpcError.message };
+      }
+
+      return { error: null };
+    } catch {
+      return { error: 'Could not reach the school server. Check your connection and try again.' };
     }
-
-    return { error: null };
   };
 
   const createUser = async (
@@ -141,28 +159,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       import.meta.env.VITE_SUPABASE_ANON_KEY,
     );
 
-    const { data: signUpData, error: signUpError } = await tempClient.auth.signUp({
-      email: pseudoEmail,
-      password,
-    });
+    try {
+      const { data: signUpData, error: signUpError } = await tempClient.auth.signUp({
+        email: pseudoEmail,
+        password,
+      });
 
-    if (signUpError) return { error: signUpError.message };
-    if (!signUpData.user) return { error: 'Account creation failed.' };
+      if (signUpError) return { error: signUpError.message };
+      if (!signUpData.user) return { error: 'Account creation failed.' };
 
-    // Sign out the temp client immediately
-    await tempClient.auth.signOut();
+      // Sign out the temp client immediately
+      await tempClient.auth.signOut();
 
-    // Insert the profile row using the admin's session (checks is_admin)
-    const { error: rpcError } = await supabase.rpc('admin_register_profile', {
-      p_user_id: signUpData.user.id,
-      p_username: username,
-      p_full_name: fullName,
-      p_role: role,
-    });
+      // Insert the profile row using the admin's session (checks is_admin)
+      const { error: rpcError } = await supabase.rpc('admin_register_profile', {
+        p_user_id: signUpData.user.id,
+        p_username: username,
+        p_full_name: fullName,
+        p_role: role,
+      });
 
-    if (rpcError) return { error: rpcError.message };
+      if (rpcError) return { error: rpcError.message };
 
-    return { error: null };
+      return { error: null };
+    } catch {
+      return { error: 'Could not reach the school server. Check your connection and try again.' };
+    }
   };
 
   return (

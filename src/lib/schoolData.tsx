@@ -49,20 +49,28 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
 
     let lastError = 'Student records could not be loaded. Please try again.';
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      const [studentResult, attendanceResult] = await Promise.all([
-        supabase.from('school_students').select(STUDENT_COLUMNS).order('full_name'),
-        supabase.from('school_attendance').select('student_id, status').eq('attendance_date', new Date().toISOString().slice(0, 10)),
-      ]);
-      if (requestRef.current !== requestId) return;
+      let attemptError: string | null = null;
+      try {
+        const [studentResult, attendanceResult] = await Promise.all([
+          supabase.from('school_students').select(STUDENT_COLUMNS).order('full_name'),
+          supabase.from('school_attendance').select('student_id, status').eq('attendance_date', new Date().toISOString().slice(0, 10)),
+        ]);
+        if (requestRef.current !== requestId) return;
 
-      if (!studentResult.error) {
-        setStudents((studentResult.data ?? []) as Student[]);
-        setAttendance(attendanceResult.error ? [] : ((attendanceResult.data ?? []) as Attendance[]));
-        setLoading(false);
-        return;
+        if (!studentResult.error) {
+          setStudents((studentResult.data ?? []) as Student[]);
+          setAttendance(attendanceResult.error ? [] : ((attendanceResult.data ?? []) as Attendance[]));
+          setLoading(false);
+          return;
+        }
+
+        attemptError = studentResult.error.message;
+      } catch {
+        attemptError = 'The school server could not be reached.';
       }
 
-      lastError = studentResult.error.message || lastError;
+      if (requestRef.current !== requestId) return;
+      lastError = attemptError || lastError;
       if (attempt < MAX_ATTEMPTS - 1) {
         await wait(RETRY_DELAY_MS);
         if (requestRef.current !== requestId) return;
@@ -89,26 +97,31 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
   const addStudent = useCallback(async (student: AdmissionFormState, records: InformationRecord[]): Promise<AddStudentResult> => {
     const admissionNumber = student.admission_number.trim();
     if (!admissionNumber) return { ok: false, message: 'Please enter an admission number.' };
-    if (await admissionNumberExists(admissionNumber)) return { ok: false, message: 'This admission number is already in use. Please use a different one.' };
 
-    const { data, error: insertError } = await supabase
-      .from('school_students')
-      .insert({ ...toStudentFeePayload({ ...student, admission_number: admissionNumber }), admission_date: student.admission_date || new Date().toISOString().slice(0, 10) })
-      .select()
-      .maybeSingle();
-    if (insertError || !data) {
-      return { ok: false, message: insertError?.message ? `The student could not be saved: ${insertError.message}` : 'The student could not be saved. Please check the admission number.' };
+    try {
+      if (await admissionNumberExists(admissionNumber)) return { ok: false, message: 'This admission number is already in use. Please use a different one.' };
+
+      const { data, error: insertError } = await supabase
+        .from('school_students')
+        .insert({ ...toStudentFeePayload({ ...student, admission_number: admissionNumber }), admission_date: student.admission_date || new Date().toISOString().slice(0, 10) })
+        .select()
+        .maybeSingle();
+      if (insertError || !data) {
+        return { ok: false, message: insertError?.message ? `The student could not be saved: ${insertError.message}` : 'The student could not be saved. Please check the admission number.' };
+      }
+
+      // Add to the shared roster straight away so it survives tab switches.
+      const savedStudent = data as Student;
+      setStudents((current) => [...current.filter((item) => item.id !== savedStudent.id), savedStudent].sort(byName));
+
+      const { error: recordError } = records.length
+        ? await supabase.from('school_other_information').insert(records.map((record) => ({ student_id: savedStudent.id, information_type: record.information_type, notes: record.notes })))
+        : { error: null };
+
+      return { ok: true, message: recordError ? 'Student saved, but their other information could not be saved' : 'New student added to the roster' };
+    } catch {
+      return { ok: false, message: 'The student could not be saved because the school server could not be reached. Please try again.' };
     }
-
-    // Add to the shared roster straight away so it survives tab switches.
-    const savedStudent = data as Student;
-    setStudents((current) => [...current.filter((item) => item.id !== savedStudent.id), savedStudent].sort(byName));
-
-    const { error: recordError } = records.length
-      ? await supabase.from('school_other_information').insert(records.map((record) => ({ student_id: savedStudent.id, information_type: record.information_type, notes: record.notes })))
-      : { error: null };
-
-    return { ok: true, message: recordError ? 'Student saved, but their other information could not be saved' : 'New student added to the roster' };
   }, []);
 
   const value = useMemo<SchoolDataValue>(() => ({ students, attendance, loading, error, refresh: load, addStudent }), [students, attendance, loading, error, load, addStudent]);

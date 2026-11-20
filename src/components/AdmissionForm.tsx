@@ -63,25 +63,33 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
 
   const printName = (prefix: string, name: string) => `${prefix ? `${prefix} ` : ''}${name}`.trim();
 
-  const printSheet = usePrintSheet(true, <section className="print-only" aria-hidden="true">
-      <div className="print-header">
-        <img src="/New_LOGO_Final.PNG" alt="SchoolDesk" />
+  const printSheet = usePrintSheet(true, <section className="print-only print-admission-sheet" aria-hidden="true">
+    <div className="print-sheet-page">
+      <header className="print-header">
+        <img src="/New_LOGO_Final.PNG" alt={`${SCHOOL_NAME} logo`} />
         <div className="print-header-copy">
           <h1>{SCHOOL_NAME}</h1>
           <p>Student Admission Form</p>
         </div>
-        <div className="print-header-admitted">
-          <span>Admitted Class</span>
-          <strong>{form.admitted_in_class || form.class_name || '—'}</strong>
+        <div className="print-header-badge">
+          <div>
+            <span>Admitted Class</span>
+            <strong>{form.admitted_in_class || form.class_name || '—'}</strong>
+          </div>
+          <div>
+            <span>Admission No.</span>
+            <strong>{form.admission_number || '—'}</strong>
+          </div>
         </div>
-      </div>
+      </header>
+
       <div className="print-layout">
         <div className="print-photo">
           {form.photo_url ? <img src={form.photo_url} alt="Student" /> : <div className="print-photo-empty">Photo</div>}
           <strong>{printName(form.student_name_prefix, form.full_name) || 'Student name'}</strong>
         </div>
         <div className="print-columns">
-          <div>
+          <section className="print-card">
             <h2>Admission Info</h2>
             {printRows([
               ['Admission No.', form.admission_number],
@@ -97,8 +105,8 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
               ['Guardian Name', form.guardian_name],
               ['Guardian Phone', form.guardian_phone],
             ])}
-          </div>
-          <div>
+          </section>
+          <section className="print-card">
             <h2>Other Info</h2>
             {printRows([
               ['Father Contact No.', form.father_contact_number],
@@ -113,14 +121,36 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
               ['Place of Birth', form.place_of_birth],
               ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
             ])}
-          </div>
+          </section>
         </div>
       </div>
+
+      <div className="print-foot">
+        <section className="print-declaration">
+          <h2>Declaration</h2>
+          <p>
+            I hereby declare that the information provided in this form is true and correct to the best of my
+            knowledge. I agree to abide by the rules, regulations and code of conduct of {SCHOOL_NAME}, and I
+            undertake to pay the prescribed fees on time.
+          </p>
+        </section>
+        <section className="print-office-use">
+          <h2>Office Use Only</h2>
+          <div className="print-office-grid">
+            <div className="print-office-line"><span>Verified By</span></div>
+            <div className="print-office-line"><span>Date</span></div>
+            <div className="print-office-line"><span>Fee Received</span></div>
+            <div className="print-office-line"><span>School Stamp</span></div>
+          </div>
+        </section>
+      </div>
+
       <div className="print-signatures">
-        <div className="print-signature"><span>Parent Signature</span></div>
+        <div className="print-signature"><span>Parent / Guardian Signature</span></div>
         <div className="print-signature"><span>Principal Signature</span></div>
       </div>
-    </section>);
+    </div>
+  </section>);
 
   return <form className="panel admission-form" onSubmit={onSubmit}>
     <div className="form-heading"><div><span className="eyebrow">{onClear ? 'New admission' : 'Edit student'}</span><h2>Student Admission Form</h2></div><div className="form-heading-side"><div className="admission-photo">{form.photo_url ? <img src={form.photo_url} alt="Student preview" /> : <div className="photo-placeholder"><UserPlus size={24} /></div>}<div className="admission-photo-copy"><span>Student Photo</span><label className="secondary-button photo-upload">Upload photo<input type="file" accept="image/*" onChange={(event) => readPhoto(event.target.files?.[0])} /></label></div></div><button type="button" className="close-button" onClick={onCancel} aria-label="Close admission form"><X size={18} /></button></div></div>
