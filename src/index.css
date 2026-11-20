@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Nastaliq+Urdu:wght@400;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -323,5 +323,104 @@ button { cursor: pointer; }
   .admission-tabs button:hover, .segmented-control button:hover,
   .nav-button:hover {
     transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   Urdu / Nastaliq name fields
+   Right-to-left, right-aligned and set in a Nastaliq face automatically,
+   so no manual language switching is needed.
+   ========================================================================== */
+.form-grid input.urdu-input,
+.form-grid input[dir="rtl"],
+input.urdu-input,
+input[dir="rtl"] {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', serif;
+  text-align: right;
+  direction: rtl;
+  font-size: 13px;
+  line-height: 2;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+input.urdu-input::placeholder,
+input[dir="rtl"]::placeholder {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', serif;
+  color: #9db0ba;
+}
+input.urdu-input:focus,
+input[dir="rtl"]:focus {
+  border-color: #71bfd4;
+  box-shadow: 0 0 0 3px #dff4f8;
+}
+
+/* ==========================================================================
+   Print sheet: header with admitted class, signature lines, clean type
+   ========================================================================== */
+@media print {
+  .print-header-copy { flex: 1; }
+  .print-header-copy h1 { font-family: 'Plus Jakarta Sans', 'DM Sans', sans-serif; letter-spacing: -.3px; }
+  .print-header-copy p { font-family: 'DM Sans', sans-serif; color: #333; }
+  .print-header-admitted {
+    text-align: right;
+    border-left: 2px solid #111;
+    padding-left: 14px;
+    min-width: 130px;
+  }
+  .print-header-admitted span {
+    display: block;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .9px;
+    color: #555;
+    font-weight: 600;
+  }
+  .print-header-admitted strong {
+    display: block;
+    font-size: 15px;
+    margin-top: 3px;
+    color: #111;
+  }
+
+  .print-photo-empty {
+    width: 120px;
+    height: 140px;
+    border: 1px dashed #bbb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px;
+    color: #8a8a8a;
+    font-size: 10px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  .print-photo strong { display: block; font-family: 'DM Sans', sans-serif; font-weight: 700; color: #111; }
+
+  .print-columns h2,
+  .print-row,
+  .print-row-label,
+  .print-row-value {
+    font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  }
+  .print-columns h2 { color: #111; font-weight: 700; }
+  .print-row-label { color: #333; font-weight: 600; }
+  .print-row-value { color: #111; }
+
+  .print-signatures {
+    display: flex;
+    justify-content: space-between;
+    gap: 70px;
+    margin-top: 60px;
+  }
+  .print-signature {
+    flex: 1;
+    border-top: 1px solid #111;
+    padding-top: 6px;
+    text-align: center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #111;
   }
 }

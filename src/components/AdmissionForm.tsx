@@ -85,11 +85,11 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
       <div className="col-span-full"><InformationRecords records={infoRecords} loading={infoLoading} loadError={infoLoadError} options={dropdownOptions.information_type} onOptionsChanged={loadDropdownOptions} onToast={onToast} onSave={onSaveInfo} onDelete={onDeleteInfo} /></div>
       <div className="form-section-title">Student and family details</div>
       <div className="prefix-field"><label>Student Name</label><div><select value={form.student_name_prefix} onChange={(event) => update('student_name_prefix', event.target.value)}><option value="">Prefix</option><option>Master</option><option>Miss</option><option>Mr.</option><option>Ms.</option></select><input required value={form.full_name} onChange={(event) => update('full_name', event.target.value)} placeholder="Enter student name" /></div></div>
-      <label>Urdu<input dir="rtl" lang="ur" value={form.full_name_urdu} onChange={(event) => update('full_name_urdu', event.target.value)} placeholder="طالب علم کا نام" /></label>
+      <label>Urdu<input className="urdu-input" dir="rtl" lang="ur" value={form.full_name_urdu} onChange={(event) => update('full_name_urdu', event.target.value)} placeholder="طالب علم کا نام" /></label>
       <div className="prefix-field"><label>Father Name</label><div><select value={form.father_name_prefix} onChange={(event) => update('father_name_prefix', event.target.value)}><option value="">Prefix</option><option>Mr.</option><option>Dr.</option></select><input required value={form.fathers_name} onChange={(event) => update('fathers_name', event.target.value)} placeholder="Enter father name" /></div></div>
-      <label>Urdu<input dir="rtl" lang="ur" value={form.fathers_name_urdu} onChange={(event) => update('fathers_name_urdu', event.target.value)} placeholder="والد کا نام" /></label>
+      <label>Urdu<input className="urdu-input" dir="rtl" lang="ur" value={form.fathers_name_urdu} onChange={(event) => update('fathers_name_urdu', event.target.value)} placeholder="والد کا نام" /></label>
       <label>Mother Name<input value={form.mother_name} onChange={(event) => update('mother_name', event.target.value)} /></label>
-      <label>Urdu<input dir="rtl" lang="ur" value={form.mother_name_urdu} onChange={(event) => update('mother_name_urdu', event.target.value)} placeholder="والدہ کا نام" /></label>
+      <label>Urdu<input className="urdu-input" dir="rtl" lang="ur" value={form.mother_name_urdu} onChange={(event) => update('mother_name_urdu', event.target.value)} placeholder="والدہ کا نام" /></label>
       <label>Father’s CNIC<input value={form.fathers_cnic} onChange={(event) => update('fathers_cnic', event.target.value)} /></label>
       <div className="get-field"><label>Student Form-B</label><div><input value={form.student_form_b} onChange={(event) => update('student_form_b', event.target.value)} /><button type="button" className="secondary-button" onClick={() => onToast('Data retrieval is ready for this student form number')}>Get</button></div></div>
       <label>Guardian Name<input required value={form.guardian_name} onChange={(event) => update('guardian_name', event.target.value)} /></label>
@@ -108,12 +108,19 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
     <section className="print-only" aria-hidden="true">
       <div className="print-header">
         <img src="/New_LOGO_Final.PNG" alt="SchoolDesk" />
-        <div><h1>{SCHOOL_NAME}</h1><p>Student Admission Form</p></div>
+        <div className="print-header-copy">
+          <h1>{SCHOOL_NAME}</h1>
+          <p>Student Admission Form</p>
+        </div>
+        <div className="print-header-admitted">
+          <span>Admitted Class</span>
+          <strong>{form.admitted_in_class || form.class_name || '—'}</strong>
+        </div>
       </div>
       <div className="print-layout">
         <div className="print-photo">
-          {form.photo_url ? <img src={form.photo_url} alt="Student" /> : <span>No photo</span>}
-          <strong>{form.full_name}</strong>
+          {form.photo_url ? <img src={form.photo_url} alt="Student" /> : <div className="print-photo-empty">Photo</div>}
+          <strong>{printName(form.student_name_prefix, form.full_name) || 'Student name'}</strong>
         </div>
         <div className="print-columns">
           <div>
@@ -124,6 +131,7 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
               ['Admitted in Class', form.admitted_in_class],
               ['Current Class', form.class_name],
               ['Section', form.section_name],
+              ['Roll No.', form.roll_number],
               ['Date of Birth', form.date_of_birth],
               ['Gender', form.gender],
               ['Student Name', printName(form.student_name_prefix, form.full_name)],
@@ -143,10 +151,17 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
               ['Permanent Address', form.permanent_address],
               ['Father’s Profession', form.father_profession],
               ['Mother Tongue', form.mother_tongue],
+              ['Nationality', form.nationality],
+              ['Religion', form.religion],
+              ['Place of Birth', form.place_of_birth],
               ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
             ])}
           </div>
         </div>
+      </div>
+      <div className="print-signatures">
+        <div className="print-signature"><span>Parent Signature</span></div>
+        <div className="print-signature"><span>Principal Signature</span></div>
       </div>
     </section>
     <div className="form-footer admission-actions no-print"><div className="record-navigation"><button type="button" onClick={() => onToast('Already at the first record')} aria-label="First record"><ChevronLeft size={14} /><ChevronLeft size={14} /></button><button type="button" onClick={() => onToast('Previous record requested')} aria-label="Previous record"><ChevronLeft size={14} /></button><button type="button" onClick={() => onToast('Next record requested')} aria-label="Next record"><ChevronRight size={14} /></button><button type="button" onClick={() => onToast('Already at the last record')} aria-label="Last record"><ChevronRight size={14} /><ChevronRight size={14} /></button></div><div className="admission-action-buttons">{onClear && <><button type="button" className="secondary-button" onClick={onClear}><Trash2 size={15} /> Delete</button><button type="button" className="secondary-button" onClick={onClear}><Plus size={15} /> New</button></>}{onAddToSession && <><button type="button" className="secondary-button" onClick={() => void onAddToSession()}>Add to Session</button><button type="button" className="secondary-button" onClick={() => onToast('SMS is ready to send after saving this student')}>Send SMS</button></>}<button type="button" className="secondary-button" onClick={onCancel}>Close</button><button type="submit" className="primary-button"><Check size={16} /> Save</button></div></div>
