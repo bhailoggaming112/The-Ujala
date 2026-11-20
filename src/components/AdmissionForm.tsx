@@ -165,64 +165,6 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
         <button type="button" className="secondary-button" onClick={exportCsv}><Download size={15} /> Export as CSV</button>
       </div>
     </div>
-    <section className="print-only" aria-hidden="true">
-      <div className="print-header">
-        <img src="/New_LOGO_Final.PNG" alt="SchoolDesk" />
-        <div className="print-header-copy">
-          <h1>{SCHOOL_NAME}</h1>
-          <p>Student Admission Form</p>
-        </div>
-        <div className="print-header-admitted">
-          <span>Admitted Class</span>
-          <strong>{form.admitted_in_class || form.class_name || '—'}</strong>
-        </div>
-      </div>
-      <div className="print-layout">
-        <div className="print-photo">
-          {form.photo_url ? <img src={form.photo_url} alt="Student" /> : <div className="print-photo-empty">Photo</div>}
-          <strong>{printName(form.student_name_prefix, form.full_name) || 'Student name'}</strong>
-        </div>
-        <div className="print-columns">
-          <div>
-            <h2>Admission Info</h2>
-            {printRows([
-              ['Admission No.', form.admission_number],
-              ['Admission Date', form.admission_date],
-              ['Admitted in Class', form.admitted_in_class],
-              ['Current Class', form.class_name],
-              ['Section', form.section_name],
-              ['Date of Birth', form.date_of_birth],
-              ['Gender', form.gender],
-              ['Student Name', printName(form.student_name_prefix, form.full_name)],
-              ['Father Name', printName(form.father_name_prefix, form.fathers_name)],
-              ['Mother Name', form.mother_name],
-              ['Guardian Name', form.guardian_name],
-              ['Guardian Phone', form.guardian_phone],
-            ])}
-          </div>
-          <div>
-            <h2>Other Info</h2>
-            {printRows([
-              ['Father Contact No.', form.father_contact_number],
-              ['Messaging Number', form.messaging_number],
-              ['WhatsApp Number', form.whatsapp_number],
-              ['Current Address', form.current_address],
-              ['Permanent Address', form.permanent_address],
-              ['Father’s Profession', form.father_profession],
-              ['Mother Tongue', form.mother_tongue],
-              ['Nationality', form.nationality],
-              ['Religion', form.religion],
-              ['Place of Birth', form.place_of_birth],
-              ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
-            ])}
-          </div>
-        </div>
-      </div>
-      <div className="print-signatures">
-        <div className="print-signature"><span>Parent Signature</span></div>
-        <div className="print-signature"><span>Principal Signature</span></div>
-      </div>
-    </section>
     <div className="form-footer admission-actions no-print"><div className="record-navigation"><button type="button" onClick={() => onToast('Already at the first record')} aria-label="First record"><ChevronLeft size={14} /><ChevronLeft size={14} /></button><button type="button" onClick={() => onToast('Previous record requested')} aria-label="Previous record"><ChevronLeft size={14} /></button><button type="button" onClick={() => onToast('Next record requested')} aria-label="Next record"><ChevronRight size={14} /></button><button type="button" onClick={() => onToast('Already at the last record')} aria-label="Last record"><ChevronRight size={14} /><ChevronRight size={14} /></button></div><div className="admission-action-buttons">{onClear && <><button type="button" className="secondary-button" onClick={onClear}><Trash2 size={15} /> Delete</button><button type="button" className="secondary-button" onClick={onClear}><Plus size={15} /> New</button></>}{onAddToSession && <><button type="button" className="secondary-button" onClick={() => void onAddToSession()}>Add to Session</button><button type="button" className="secondary-button" onClick={() => onToast('SMS is ready to send after saving this student')}>Send SMS</button></>}<button type="button" className="secondary-button" onClick={onCancel}>Close</button><button type="submit" className="primary-button"><Check size={16} /> Save</button></div></div>
     {printSheet}
   </form>;

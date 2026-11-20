@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Printer, X } from 'lucide-react';
 import { SCHOOL_NAME } from '@/lib/noticeText';
+import { usePrintSheet } from '@/lib/usePrintSheet';
 import type { FeeTransaction, Student } from '@/lib/schoolTypes';
 
 const formatAmount = (value: number) => `Rs ${Number(value).toLocaleString()}`;
@@ -9,12 +9,6 @@ const formatAmount = (value: number) => `Rs ${Number(value).toLocaleString()}`;
 export function FeeReceiptModal({ student, entry, onClose }: { student: Student; entry: FeeTransaction; onClose: () => void }) {
   const printedRef = useRef(false);
   const [logoSettled, setLogoSettled] = useState(false);
-
-  useEffect(() => {
-    if (!logoSettled || printedRef.current) return;
-    printedRef.current = true;
-    window.print();
-  }, [logoSettled]);
 
   const receiptNumber = `RCPT-${entry.id.slice(0, 8).toUpperCase()}`;
   const isPayment = entry.kind === 'payment';
@@ -27,18 +21,54 @@ export function FeeReceiptModal({ student, entry, onClose }: { student: Student;
     { label: 'Father’s name', value: student.fathers_name || '—' },
   ];
 
-  return createPortal(
+  const printSheet = usePrintSheet(true, (
+    <section className="print-only print-fee-receipt">
+      <div className="print-header">
+        <img
+          src="/New_LOGO_Final.PNG"
+          alt={`${SCHOOL_NAME} logo`}
+          onLoad={() => setLogoSettled(true)}
+          onError={() => setLogoSettled(true)}
+        />
+        <div className="print-header-copy">
+          <h1>{SCHOOL_NAME}</h1>
+          <p>Fee Receipt</p>
+        </div>
+        <div className="print-header-admitted">
+          <span>Receipt No.</span>
+          <strong>{receiptNumber}</strong>
+        </div>
+      </div>
+      <div className="print-columns">
+        <div>
+          <h2>Receipt Details</h2>
+          {details.map((detail) => <div className="print-row" key={detail.label}><span className="print-row-label">{detail.label}</span><span className="print-row-value">{detail.value}</span></div>)}
+        </div>
+        <div>
+          <h2>Amount</h2>
+          <div className="print-row"><span className="print-row-label">{isPayment ? 'Amount received' : 'Amount charged'}</span><span className="print-row-value">{isPayment ? '−' : '+'}{formatAmount(entry.amount)}</span></div>
+          <div className="print-row"><span className="print-row-label">Balance after this entry</span><span className="print-row-value">{formatAmount(entry.balance_after)}</span></div>
+        </div>
+      </div>
+      <div className="print-signatures">
+        <div className="print-signature"><span>Received By</span></div>
+        <div className="print-signature"><span>Authorised Signature</span></div>
+      </div>
+    </section>
+  ));
+
+  useEffect(() => {
+    if (!logoSettled || printedRef.current) return;
+    printedRef.current = true;
+    window.print();
+  }, [logoSettled]);
+
+  return (
     <div className="notice-overlay">
-      <section className="notice-modal print-sheet">
+      <section className="notice-modal">
         <div className="notice-preview-top">
           <div className="flex items-center gap-4">
-            <img
-              src="/New_LOGO_Final.PNG"
-              alt={`${SCHOOL_NAME} logo`}
-              className="h-14 w-14 object-contain"
-              onLoad={() => setLogoSettled(true)}
-              onError={() => setLogoSettled(true)}
-            />
+            <img src="/New_LOGO_Final.PNG" alt={`${SCHOOL_NAME} logo`} className="h-14 w-14 object-contain" />
             <div>
               <span className="eyebrow">Fee receipt</span>
               <h2 className="mt-1 text-xl font-bold text-slate-800">{SCHOOL_NAME}</h2>
@@ -71,7 +101,7 @@ export function FeeReceiptModal({ student, entry, onClose }: { student: Student;
           <button className="primary-button" onClick={() => window.print()}><Printer size={16} /> Print receipt</button>
         </div>
       </section>
-    </div>,
-    document.body,
+      {printSheet}
+    </div>
   );
 }

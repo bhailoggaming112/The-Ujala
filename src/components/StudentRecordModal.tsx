@@ -1,15 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Printer, X } from 'lucide-react';
 import type { Student } from '@/lib/schoolTypes';
+import { SCHOOL_NAME } from '@/lib/noticeText';
 import { FeeHistory } from '@/components/FeeHistory';
 import { useFeeTransactions } from '@/lib/useFeeTransactions';
+import { usePrintSheet } from '@/lib/usePrintSheet';
 import { StudentPhoto } from '@/components/StudentPhoto';
 
 export function StudentRecordModal({ student, autoPrint, onClose }: { student: Student; autoPrint: boolean; onClose: () => void }) {
   const { entries, loading, error } = useFeeTransactions(student.id);
-  useEffect(() => {
-    if (autoPrint) window.print();
-  }, [autoPrint]);
+  const [logoSettled, setLogoSettled] = useState(false);
 
   const details: { label: string; value: string | null | undefined }[] = [
     { label: 'Admission no.', value: student.admission_number },
@@ -31,9 +31,65 @@ export function StudentRecordModal({ student, autoPrint, onClose }: { student: S
     { label: 'Fee balance', value: `Rs ${Number(student.fee_balance).toLocaleString()}` },
   ];
 
+  // The single printable copy of this record. It lives outside the app chrome,
+  // so printing never picks up the modal, the sidebar or a second copy.
+  const printSheet = usePrintSheet(true, (
+    <section className="print-only print-student-record">
+      <div className="print-header">
+        <img
+          src="/New_LOGO_Final.PNG"
+          alt={`${SCHOOL_NAME} logo`}
+          onLoad={() => setLogoSettled(true)}
+          onError={() => setLogoSettled(true)}
+        />
+        <div className="print-header-copy">
+          <h1>{SCHOOL_NAME}</h1>
+          <p>Student Record</p>
+        </div>
+        <div className="print-header-admitted">
+          <span>Class</span>
+          <strong>{student.class_name} · {student.section_name}</strong>
+        </div>
+      </div>
+      <div className="print-layout">
+        <div className="print-photo">
+          <StudentPhoto src={student.photo_url} name={student.full_name} className="print-photo-img" />
+          <strong>{student.full_name}</strong>
+        </div>
+        <div className="print-columns">
+          <div>
+            <h2>Student Details</h2>
+            {details.slice(0, 9).map((detail) => <div className="print-row" key={detail.label}><span className="print-row-label">{detail.label}</span><span className="print-row-value">{detail.value || '—'}</span></div>)}
+          </div>
+          <div>
+            <h2>Family and Other Info</h2>
+            {details.slice(9).map((detail) => <div className="print-row" key={detail.label}><span className="print-row-label">{detail.label}</span><span className="print-row-value">{detail.value || '—'}</span></div>)}
+          </div>
+        </div>
+      </div>
+      <div className="print-fee-section">
+        <h2>Fee History</h2>
+        {entries.length ? entries.map((entry) => (
+          <div className="print-row" key={entry.id}>
+            <span className="print-row-label">{new Date(entry.created_at).toLocaleDateString()} · {entry.kind === 'payment' ? 'Payment' : 'Charge'}</span>
+            <span className="print-row-value">Rs {Number(entry.amount).toLocaleString()} · Balance Rs {Number(entry.balance_after).toLocaleString()}</span>
+          </div>
+        )) : <div className="print-row"><span className="print-row-value">No fee entries recorded</span></div>}
+      </div>
+      <div className="print-signatures">
+        <div className="print-signature"><span>Parent Signature</span></div>
+        <div className="print-signature"><span>Principal Signature</span></div>
+      </div>
+    </section>
+  ));
+
+  useEffect(() => {
+    if (autoPrint && logoSettled) window.print();
+  }, [autoPrint, logoSettled]);
+
   return (
     <div className="notice-overlay">
-      <section className="notice-modal print-sheet">
+      <section className="notice-modal">
         <div className="notice-preview-top">
           <div>
             <span className="eyebrow">Student record</span>
@@ -57,11 +113,12 @@ export function StudentRecordModal({ student, autoPrint, onClose }: { student: S
           ))}
         </dl>
         <FeeHistory student={student} entries={entries} loading={loading} error={error} />
-        <div className="notice-preview-actions no-print">
-          <button className="secondary-button" onClick={onClose}>Close</button>
-          <button className="primary-button" onClick={() => window.print()}><Printer size={16} /> Print record</button>
-        </div>
+      <div className="notice-preview-actions no-print">
+        <button className="secondary-button" onClick={onClose}>Close</button>
+        <button className="primary-button" onClick={() => window.print()}><Printer size={16} /> Print record</button>
+      </div>
       </section>
+      {printSheet}
     </div>
   );
 }
