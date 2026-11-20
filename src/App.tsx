@@ -98,12 +98,18 @@ function AppInner() {
       supabase.from('school_students').select('id, admission_number, admission_date, date_of_birth, admitted_in_class, full_name, student_name_prefix, father_name_prefix, mother_name, gender, class_name, section_name, guardian_name, guardian_phone, fathers_name, fathers_cnic, student_form_b, last_school, last_class, subject_group, place_of_birth, photo_url, roll_number, mother_number, religion, house, student_group, area, mother_tongue, nationality, data_source, clearance_status, fee_balance, status, current_address, permanent_address, father_contact_number, messaging_number, father_profession, guardian_relationship, guardian_cnic, whatsapp_number, tuition_fee, fee_concession_percentage, fee_concession_amount, fine_exempt, full_name_urdu, fathers_name_urdu, mother_name_urdu, leaving_date, leaving_reason, leaving_remarks, leaving_status, leaving_class, progress, conduct, fee_paid_upto, leaving_certificate_number, leaving_certificate_date, submitted_b_form, submitted_previous_tc, submitted_birth_certificate, submitted_photos, submitted_other_docs, submitted_b_form_file, submitted_previous_tc_file, submitted_birth_certificate_file, submitted_photos_file, submitted_other_docs_file, issued_tc_number, issued_tc_date, issued_character_certificate, issued_migration_certificate, issued_other_docs, issued_dmc, issued_dmc_file, issued_provisional_certificate, issued_provisional_certificate_file, issued_original_certificate, issued_original_certificate_file, issued_birth_certificate, issued_birth_certificate_file, issued_character_certificate_file, issued_migration_certificate_file').order('full_name'),
       supabase.from('school_attendance').select('student_id, status').eq('attendance_date', new Date().toISOString().slice(0, 10)),
     ]);
-    if (!studentError && studentRows) setStudents(studentRows as Student[]);
+    if (studentError) {
+      setToast('Student records could not be loaded. Please refresh the page.');
+    } else if (studentRows) {
+      setStudents(studentRows as Student[]);
+    }
     if (!attendanceError && attendanceRows) setAttendance(attendanceRows as Attendance[]);
     setLoading(false);
   };
 
-  useEffect(() => { void loadSchoolData(); }, []);
+  // Records can only be read once the signed-in user is known, so load them
+  // when the profile becomes available instead of once on mount.
+  useEffect(() => { if (profile?.id) void loadSchoolData(); }, [profile?.id]);
   useEffect(() => { if (toast) { const timer = window.setTimeout(() => setToast(''), 3000); return () => window.clearTimeout(timer); } }, [toast]);
 
   const counts = useMemo(() => ({
@@ -150,14 +156,18 @@ function AppInner() {
     if (!admissionNumber) { setToast('Please enter an admission number.'); return false; }
     if (await admissionNumberExists(admissionNumber)) { setToast('This admission number is already in use. Please use a different one.'); return false; }
     const { data, error } = await supabase.from('school_students').insert({ ...toStudentFeePayload({ ...student, admission_number: admissionNumber }), admission_date: student.admission_date || new Date().toISOString().slice(0, 10) }).select().maybeSingle();
-    if (error || !data) { setToast('The student could not be saved. Please check the admission number.'); return false; }
+    if (error || !data) {
+      setToast(error?.message ? `The student could not be saved: ${error.message}` : 'The student could not be saved. Please check the admission number.');
+      return false;
+    }
     const savedStudent = data as Student;
     const { error: recordError } = records.length
       ? await supabase.from('school_other_information').insert(records.map((record) => ({ student_id: savedStudent.id, information_type: record.information_type, notes: record.notes })))
       : { error: null };
-    setStudents((current) => [...current, savedStudent].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+    setStudents((current) => [...current.filter((item) => item.id !== savedStudent.id), savedStudent].sort((a, b) => a.full_name.localeCompare(b.full_name)));
     setToast(recordError ? 'Student saved, but their other information could not be saved' : 'New student added to the roster');
     navigate('students');
+    void loadSchoolData();
     return true;
   };
 
