@@ -191,6 +191,7 @@ function ChallanSheet({ challan, settings }: { challan: ChallanDocument; setting
   const copyLabel = 'Student Copy';
   const scanCode = challanScanCode(challan);
   const hasEasypaisa = Boolean(settings.easypaisa_account_no.trim());
+  const hasBank = Boolean(settings.bank_account_no.trim() || settings.bank_name.trim());
 
   return (
     <section className="print-only print-challan">
@@ -220,7 +221,7 @@ function ChallanSheet({ challan, settings }: { challan: ChallanDocument; setting
           <div className="print-row"><span className="print-row-label">Due date</span><span className="print-row-value">{formatDay(challan.due_date)}</span></div>
           <div className="print-row"><span className="print-row-label">Status</span><span className="print-row-value">{challan.status}</span></div>
         </div>
-        <div>
+        <div className="challan-fee-heads">
           <h2>Fee Heads</h2>
           {headKeys.map((key) => (
             <div className="print-row" key={key}>
@@ -235,18 +236,35 @@ function ChallanSheet({ challan, settings }: { challan: ChallanDocument; setting
       <div className="challan-pay-block">
         <div className="challan-pay-copy">
           <h2>How to Pay</h2>
-          {hasEasypaisa ? (
-            <>
-              <div className="print-row"><span className="print-row-label">Easypaisa account no.</span><span className="print-row-value">{settings.easypaisa_account_no}</span></div>
-              {settings.easypaisa_account_name.trim() && (
-                <div className="print-row"><span className="print-row-label">Account title</span><span className="print-row-value">{settings.easypaisa_account_name}</span></div>
-              )}
-            </>
+          {hasEasypaisa || hasBank ? (
+            <div className="challan-pay-groups">
+              <div className="challan-pay-group">
+                <span className="challan-pay-group-title">Easypaisa</span>
+                {hasEasypaisa ? (
+                  <>
+                    <div className="print-row"><span className="print-row-label">Account no.</span><span className="print-row-value">{settings.easypaisa_account_no}</span></div>
+                    {settings.easypaisa_account_name.trim() && (
+                      <div className="print-row"><span className="print-row-label">Account title</span><span className="print-row-value">{settings.easypaisa_account_name}</span></div>
+                    )}
+                  </>
+                ) : (
+                  <p className="challan-pay-note">Not set. Ask the office for the Easypaisa account.</p>
+                )}
+              </div>
+              <div className="challan-pay-group">
+                <span className="challan-pay-group-title">Bank transfer</span>
+                {hasBank ? (
+                  <>
+                    <div className="print-row"><span className="print-row-label">Bank name</span><span className="print-row-value">{settings.bank_name.trim() || '—'}</span></div>
+                    <div className="print-row"><span className="print-row-label">Account / IBAN no.</span><span className="print-row-value">{settings.bank_account_no.trim() || '—'}</span></div>
+                  </>
+                ) : (
+                  <p className="challan-pay-note">Not set. Ask the office for the bank account.</p>
+                )}
+              </div>
+            </div>
           ) : (
             <p className="challan-pay-note">Pay at the school office counter during working hours.</p>
-          )}
-          {settings.bank_account_no.trim() && (
-            <div className="print-row"><span className="print-row-label">{settings.bank_name.trim() || 'Bank'} account no.</span><span className="print-row-value">{settings.bank_account_no}</span></div>
           )}
           <p className="challan-pay-note">Keep this Student Copy and bring it, or the barcode below, when depositing the fee.</p>
         </div>
@@ -306,12 +324,18 @@ export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClo
 
         <div className="challan-pay-preview">
           <div>
-            <span className="eyebrow">Pay with Easypaisa</span>
-            <p>
-              {settings.easypaisa_account_no.trim()
-                ? <>Account no. <strong>{settings.easypaisa_account_no}</strong>{settings.easypaisa_account_name.trim() ? ` · ${settings.easypaisa_account_name}` : ''}</>
-                : 'No Easypaisa account is saved yet. An administrator can add it under Fee Structure.'}
-            </p>
+            <span className="eyebrow">How to pay</span>
+            {settings.easypaisa_account_no.trim() && (
+              <p>Easypaisa account no. <strong>{settings.easypaisa_account_no}</strong>{settings.easypaisa_account_name.trim() ? ` · ${settings.easypaisa_account_name}` : ''}</p>
+            )}
+            {(settings.bank_account_no.trim() || settings.bank_name.trim()) && (
+              <p>
+                {settings.bank_name.trim() ? `${settings.bank_name.trim()} ` : 'Bank '}account / IBAN no. <strong>{settings.bank_account_no.trim() || '—'}</strong>
+              </p>
+            )}
+            {!settings.easypaisa_account_no.trim() && !settings.bank_account_no.trim() && !settings.bank_name.trim() && (
+              <p>No payment details are saved yet. An administrator can add them under Fee Structure.</p>
+            )}
           </div>
           <FeeBarcode value={firstCode} caption={challans.length === 1 ? 'Scan to pay' : 'First challan shown'} height={54} module={2} />
         </div>

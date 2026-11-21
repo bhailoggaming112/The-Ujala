@@ -434,21 +434,27 @@ function PaymentDetailsCard({ settings, isAdmin, onToast, onSaved }: {
         <span className="fee-hint">Printed on every challan</span>
       </div>
       <form className="fee-form" onSubmit={save}>
-        <div className="fee-form-row">
-          <label className="control-field"><span>Easypaisa account no.</span>
-            <input value={draft.easypaisa_account_no} onChange={(event) => update('easypaisa_account_no', event.target.value)} placeholder="e.g. 0300 1234567" disabled={!isAdmin} />
-          </label>
-          <label className="control-field"><span>Easypaisa account title</span>
-            <input value={draft.easypaisa_account_name} onChange={(event) => update('easypaisa_account_name', event.target.value)} placeholder="Name on the account" disabled={!isAdmin} />
-          </label>
+        <div className="fee-form-group">
+          <p className="fee-form-group-label">Easypaisa</p>
+          <div className="fee-form-row">
+            <label className="control-field"><span>Easypaisa account no.</span>
+              <input value={draft.easypaisa_account_no} onChange={(event) => update('easypaisa_account_no', event.target.value)} placeholder="e.g. 0300 1234567" disabled={!isAdmin} />
+            </label>
+            <label className="control-field"><span>Easypaisa account title</span>
+              <input value={draft.easypaisa_account_name} onChange={(event) => update('easypaisa_account_name', event.target.value)} placeholder="Name on the account" disabled={!isAdmin} />
+            </label>
+          </div>
         </div>
-        <div className="fee-form-row">
-          <label className="control-field"><span>Bank name</span>
-            <input value={draft.bank_name} onChange={(event) => update('bank_name', event.target.value)} placeholder="Optional" disabled={!isAdmin} />
-          </label>
-          <label className="control-field"><span>Bank account no.</span>
-            <input value={draft.bank_account_no} onChange={(event) => update('bank_account_no', event.target.value)} placeholder="Optional" disabled={!isAdmin} />
-          </label>
+        <div className="fee-form-group">
+          <p className="fee-form-group-label">Bank account</p>
+          <div className="fee-form-row">
+            <label className="control-field"><span>Bank name</span>
+              <input value={draft.bank_name} onChange={(event) => update('bank_name', event.target.value)} placeholder="e.g. HBL, Meezan Bank" disabled={!isAdmin} />
+            </label>
+            <label className="control-field"><span>Bank account / IBAN no.</span>
+              <input value={draft.bank_account_no} onChange={(event) => update('bank_account_no', event.target.value)} placeholder="e.g. PK36SCBL0000001123456702" disabled={!isAdmin} />
+            </label>
+          </div>
         </div>
         {isAdmin ? (
           <div className="fee-form-actions">

@@ -1657,6 +1657,8 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 
 .fee-form { display: flex; flex-direction: column; gap: 14px; }
 .fee-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fee-form-group { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid #e4ecf0; border-radius: 12px; background: #fafcfd; }
+.fee-form-group-label { margin: 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.1px; color: #2f6d86; }
 .fee-form-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .fee-segmented { margin-bottom: 16px; }
 
@@ -1748,6 +1750,15 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .print-fee-receipt .print-row-label, .print-challan .print-row-label { color: #5a6b76; }
   .print-fee-receipt .print-row-value, .print-challan .print-row-value { font-weight: 700; }
   .print-challan .print-row.total { border-top: 1.5px solid #132a3a; background: #f7fbfc; font-weight: 800; }
+  /* Fee head amounts sit hard right so every figure lines up on the rupee digit. */
+  .print-challan .challan-fee-heads .print-row-label { width: 45%; }
+  .print-challan .challan-fee-heads .print-row-value {
+    width: 55%;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+  .print-challan .challan-fee-heads .print-row.total .print-row-value { text-align: right; }
   .print-challan + .print-challan { page-break-before: always; break-before: page; }
 
   /* Student Copy label and the pay-with-Easypaisa block on the challan. */
@@ -1766,6 +1777,25 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .print-challan .challan-pay-block { display: flex; gap: 16px; align-items: flex-start; margin-top: 14px; break-inside: avoid; }
   .print-challan .challan-pay-copy { flex: 1; }
   .print-challan .challan-pay-copy h2 { font-size: 12px; border-bottom: 1px solid #999; padding-bottom: 3px; margin: 0 0 6px; }
+  /* Easypaisa and bank shown as two separate groups, never repeated. */
+  .print-challan .challan-pay-groups { display: flex; gap: 18px; align-items: flex-start; }
+  .print-challan .challan-pay-group { flex: 1; min-width: 0; }
+  .print-challan .challan-pay-group-title {
+    display: block;
+    margin: 0 0 4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #2f6d86;
+  }
+  .print-challan .challan-pay-group .print-row-label { width: 46%; }
+  .print-challan .challan-pay-group .print-row-value {
+    width: 54%;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    word-break: break-word;
+  }
   .print-challan .challan-pay-note { margin: 6px 0 0; font-size: 9.5px; color: #46596a; }
   .print-challan .challan-barcode-block { flex: 0 0 210px; text-align: center; }
   .print-challan .fee-barcode-svg { max-width: 210px; }
