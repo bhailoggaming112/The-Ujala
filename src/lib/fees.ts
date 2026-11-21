@@ -59,6 +59,33 @@ export type ChallanDocument = FeeChallan & { admission_number: string | null };
 export const challanScanCode = (challan: { challan_number?: string | null; admission_number?: string | null; month: string }) =>
   (challan.challan_number ?? '').trim() || `${challan.admission_number ?? ''}+${challan.month}`;
 
+// The readable challan number shown and printed everywhere: CH-<admission digits>-<YYYYMM>,
+// for example CH-2401-202611. A challan that is still only a preview has no stored number
+// yet, so the same code the database will assign is derived here.
+export const challanDisplayNumber = (challan: { challan_number?: string | null; admission_number?: string | null; month: string }) => {
+  const stored = (challan.challan_number ?? '').trim();
+  if (stored) return stored;
+
+  const digits = (challan.admission_number ?? '').replace(/\D/g, '');
+  const month = (challan.month ?? '').trim();
+  if (!digits || !/^\d{4}-\d{2}$/.test(month)) return '';
+
+  return `CH-${digits}-${month.replace('-', '')}`;
+};
+
+// Asks the database for the challan number this student and month will be given, so a
+// preview shows the real number rather than a placeholder. Returns an empty string when
+// the lookup is unavailable; the caller then falls back to the locally derived code.
+export async function nextChallanNumber(studentId: string, month: string): Promise<string> {
+  try {
+    const { data, error } = await supabase.rpc('next_fee_challan_number', { p_student_id: studentId, p_month: month });
+    if (error || typeof data !== 'string' || !data.trim()) return '';
+    return data.trim();
+  } catch {
+    return '';
+  }
+}
+
 export type FeePayment = {
   id: string;
   student_id: string;

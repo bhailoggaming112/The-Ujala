@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Download, FileSpreadsheet, Printer, Save } from 'lucide-react';
 import { ChallanView } from '@/components/FeeDocuments';
 import {
-  CLASS_OPTIONS, HEAD_LABELS, collectedInMonth, dailyTotals, downloadCsv,
+  CLASS_OPTIONS, HEAD_LABELS, challanDisplayNumber, collectedInMonth, dailyTotals, downloadCsv,
   formatDay, formatMoney, headsTotal, methodTotals, monthKey, monthLabel, monthOptions, monthlyChargeFor,
-  saveChallans, saveFeeStructure, savePaymentSettings, toCsv,
+  nextChallanNumber, saveChallans, saveFeeStructure, savePaymentSettings, toCsv,
   type ChallanDocument, type FeeChallan, type FeeHeads, type FeePayment, type FeeStructure, type PaymentSettings,
 } from '@/lib/fees';
 import type { Student } from '@/lib/schoolTypes';
@@ -89,14 +89,14 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
 
   const admissionFor = (studentId: string) => students.find((student) => student.id === studentId)?.admission_number ?? null;
 
-  const toChallan = (draft: ChallanDraft): ChallanDocument => ({
+  const toChallan = (draft: ChallanDraft, challanNumber: string | null = null): ChallanDocument => ({
     id: `preview-${draft.student.id}`,
     student_id: draft.student.id,
     student_name: draft.student.full_name,
     admission_number: draft.student.admission_number,
     class_name: draft.student.class_name,
     section_name: draft.student.section_name,
-    challan_number: null,
+    challan_number: challanNumber,
     month,
     due_date: dueDate,
     tuition_fee: draft.tuition_fee,
@@ -110,6 +110,24 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
     status: 'unpaid',
     created_at: new Date().toISOString(),
   });
+
+  // Shows the challan immediately, then swaps in the numbers the database confirms, so
+  // the preview never sits on a placeholder.
+  const openPreview = () => {
+    const sheets = drafts.map((draft) => toChallan(draft));
+    setPreview(sheets);
+    const issued = new Map<string, string>();
+    void Promise.all(drafts.map(async (draft) => {
+      const number = await nextChallanNumber(draft.student.id, month);
+      if (number) issued.set(draft.student.id, number);
+    })).then(() => {
+      if (issued.size === 0) return;
+      setPreview(sheets.map((sheet) => {
+        const number = issued.get(sheet.student_id);
+        return number ? { ...sheet, challan_number: number } : sheet;
+      }));
+    });
+  };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -238,7 +256,7 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
           )}
 
           <div className="fee-form-actions">
-            <button type="button" className="secondary-button" onClick={() => setPreview(drafts.map(toChallan))} disabled={drafts.length === 0}>
+            <button type="button" className="secondary-button" onClick={openPreview} disabled={drafts.length === 0}>
               <Printer size={16} /> Preview
             </button>
             <button type="submit" className="primary-button" disabled={saving || drafts.length === 0}>
@@ -268,7 +286,7 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
               <tbody>
                 {savedChallans.map((challan) => (
                   <tr key={challan.id}>
-                    <td className="fee-mono">{challan.challan_number || '—'}</td>
+                    <td className="fee-mono">{challanDisplayNumber(challan) || '—'}</td>
                     <td><strong>{challan.student_name}</strong></td>
                     <td>{admissionFor(challan.student_id) || '—'}</td>
                     <td>{formatDay(challan.due_date)}</td>

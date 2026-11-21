@@ -5,7 +5,7 @@ import { SCHOOL_NAME } from '@/lib/noticeText';
 import { usePrintSheet } from '@/lib/usePrintSheet';
 import type { Student } from '@/lib/schoolTypes';
 import {
-  EMPTY_PAYMENT_SETTINGS, HEAD_LABELS, challanScanCode, formatDay, formatMoney, formatStamp, monthLabel,
+  EMPTY_PAYMENT_SETTINGS, HEAD_LABELS, challanDisplayNumber, challanScanCode, formatDay, formatMoney, formatStamp, monthLabel,
   type ChallanDocument, type FeeHeads, type FeePayment, type FeeSummary, type PaymentSettings,
 } from '@/lib/fees';
 
@@ -217,7 +217,7 @@ function ChallanSheet({ challan, settings }: { challan: ChallanDocument; setting
           <div className="print-row"><span className="print-row-label">Admission no.</span><span className="print-row-value">{challan.admission_number || '—'}</span></div>
           <div className="print-row"><span className="print-row-label">Class</span><span className="print-row-value">{challan.class_name ?? '—'} · Section {challan.section_name ?? '—'}</span></div>
           <div className="print-row"><span className="print-row-label">Fee month</span><span className="print-row-value">{monthLabel(challan.month)}</span></div>
-          <div className="print-row"><span className="print-row-label">Challan no.</span><span className="print-row-value">{challan.challan_number || 'Generated on save'}</span></div>
+          <div className="print-row"><span className="print-row-label">Challan no.</span><span className="print-row-value">{challanDisplayNumber(challan) || '—'}</span></div>
           <div className="print-row"><span className="print-row-label">Due date</span><span className="print-row-value">{formatDay(challan.due_date)}</span></div>
           <div className="print-row"><span className="print-row-label">Status</span><span className="print-row-value">{challan.status}</span></div>
         </div>
@@ -298,6 +298,9 @@ export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClo
   if (!first) return null;
 
   const firstCode = challanScanCode(first);
+  // The barcode carries the formatted challan number so a scanned Student Copy resolves
+  // to the student and month even before the challan itself has been saved.
+  const firstNumber = challanDisplayNumber(first) || firstCode;
 
   return (
     <div className="notice-overlay">
@@ -316,7 +319,7 @@ export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClo
         </div>
 
         <div className="challan-preview-head">
-          <span>Challan no. <strong>{first.challan_number || firstCode}</strong></span>
+          <span>Challan no. <strong>{firstNumber}</strong></span>
           <span>Admission no. <strong>{first.admission_number || '—'}</strong></span>
           <span>Fee month <strong>{monthLabel(first.month)}</strong></span>
           <span>Due date <strong>{formatDay(first.due_date)}</strong></span>
@@ -337,7 +340,7 @@ export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClo
               <p>No payment details are saved yet. An administrator can add them under Fee Structure.</p>
             )}
           </div>
-          <FeeBarcode value={firstCode} caption={challans.length === 1 ? 'Scan to pay' : 'First challan shown'} height={54} module={2} />
+          <FeeBarcode value={firstNumber} caption={challans.length === 1 ? 'Scan to pay' : 'First challan shown'} height={54} module={2} />
         </div>
 
         <div className="table-wrap challan-preview-table">
@@ -355,7 +358,7 @@ export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClo
             <tbody>
               {challans.map((challan) => (
                 <tr key={challan.id}>
-                  <td className="fee-mono">{challan.challan_number || challanScanCode(challan)}</td>
+                  <td className="fee-mono">{challanDisplayNumber(challan) || '—'}</td>
                   <td><strong>{challan.student_name}</strong></td>
                   <td>{challan.admission_number || '—'}</td>
                   <td>{challan.class_name ?? '—'} · {challan.section_name ?? '—'}</td>
