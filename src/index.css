@@ -1207,3 +1207,94 @@ input[dir="rtl"]:focus {
   .cal-clear-button.inline { width: 100%; justify-content: center; }
   .cal-item-date { flex: 1 1 100%; }
 }
+
+/* --- Save / clear attendance confirmation -------------------------------- */
+.att-save-modal h2 {
+  margin: 6px 0 0;
+  color: #2e4759;
+  font: 800 21px 'Plus Jakarta Sans';
+  letter-spacing: -.4px;
+}
+.att-save-modal h2 + small { display: block; margin-top: 4px; color: #93a5af; font-size: 11px; }
+
+.att-save-date {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid #cbe6ed;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eef8fa 0%, #e4f5f8 100%);
+  box-shadow: inset 0 1px 0 #ffffffb0;
+}
+.att-save-date-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: white;
+  color: #247790;
+  box-shadow: 0 4px 10px #2b5f7014;
+}
+.att-save-date-label {
+  display: block;
+  color: #5f7c8b;
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+}
+.att-save-date strong {
+  display: block;
+  margin-top: 4px;
+  color: #1f6277;
+  font: 800 24px 'Plus Jakarta Sans';
+  letter-spacing: -.5px;
+  line-height: 1.15;
+}
+.att-save-date small { display: block; margin-top: 2px; color: #6f93a2; font-size: 11px; font-weight: 700; }
+
+.att-save-marks { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
+.att-save-marks span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.att-save-marks span.present { background: #e8f7ed; color: #3f8a60; }
+.att-save-marks span.absent { background: #fff0eb; color: #c15a4c; }
+.att-save-marks span.late { background: #fff6db; color: #a97f22; }
+.att-save-marks span.leave { background: #eef4fc; color: #3f6fa8; }
+
+.att-save-note { margin: 14px 0 0; color: #718794; font-size: 12px; line-height: 1.6; }
+.att-save-note b { color: #3a5565; font-weight: 800; }
+.att-save-note.warn {
+  padding: 11px 13px;
+  border: 1px solid #f1e2b4;
+  border-radius: 10px;
+  background: #fffdf2;
+  color: #8a7333;
+  font-size: 11.5px;
+}
+
+.att-save-modal .notice-preview-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #edf2f4;
+}
+.att-save-modal .notice-preview-actions .primary-button,
+.att-save-modal .notice-preview-actions .danger-button { min-width: 150px; }
+
+@media (max-width: 760px) {
+  .att-save-modal h2 { font-size: 18px; }
+  .att-save-date { padding: 14px; }
+  .att-save-date strong { font-size: 19px; }
+  .att-save-modal .notice-preview-actions { flex-direction: column-reverse; }
+  .att-save-modal .notice-preview-actions button { width: 100%; }
+}

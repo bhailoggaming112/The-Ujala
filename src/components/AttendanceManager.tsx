@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  CalendarCheck2, CalendarDays, Check, CheckCheck, FileBadge2, Filter, MessageCircle, Printer, RotateCcw, Save, Search,
+  CalendarCheck2, CalendarDays, Check, CheckCheck, Clock, FileBadge2, Filter, MessageCircle, Printer, RotateCcw, Save, Search,
   Trash2, UserX, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -53,6 +53,12 @@ const parseCount = (value: string) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : 0;
 };
+
+const formatLongDate = (value: string) =>
+  new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+
+const formatWeekday = (value: string) =>
+  new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long' });
 
 const dayKey = (value: string) => value.slice(0, 10);
 
@@ -160,10 +166,12 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
       sectionStudents.map((student) => statusOf(student.id)).filter(Boolean) as string[],
       policy.exclude_leave_from_denominator,
     );
+    // Late arrivals are reported on their own card, so Present here is exclusive
+    // of late: the five cards then add up to the class total.
     return {
       total: sectionStudents.length,
       marked: marked.marked,
-      present: marked.present + marked.late,
+      present: marked.present,
       absent: marked.absent,
       late: marked.late,
       leave: marked.leave,
@@ -195,6 +203,16 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
     .filter((student) => !term
       || student.full_name.toLowerCase().includes(term)
       || student.admission_number.toLowerCase().includes(term));
+
+  // Drives the wording of the save confirmation: a date that already has records
+  // will be updated rather than created.
+  const hasSavedRecords = storedMarks.size > 0;
+  const marksSaved = [
+    { key: 'present', label: 'Present', value: counts.present, Icon: CheckCheck },
+    { key: 'absent', label: 'Absent', value: counts.absent, Icon: UserX },
+    { key: 'late', label: 'Late', value: counts.late, Icon: Clock },
+    { key: 'leave', label: 'Leave', value: counts.leave, Icon: CalendarCheck2 },
+  ].filter((item) => item.value > 0);
 
   const setMark = (id: string, status: AttendanceStatus) => setDraft((current) => ({ ...current, [id]: status }));
 
@@ -611,27 +629,65 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
 
       {confirm && (
         <div className="notice-overlay" onClick={() => setConfirm(null)}>
-          <form className="notice-modal" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (confirm === 'save') void saveAttendance(); else void deleteAttendance(); }}>
+          <form
+            className="notice-modal att-save-modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => { e.preventDefault(); if (confirm === 'save') void saveAttendance(); else void deleteAttendance(); }}
+          >
             <div className="notice-preview-top">
               <div>
                 <span className="eyebrow">{confirm === 'save' ? 'Save attendance' : 'Clear attendance'}</span>
-                <h2 className="mt-1 text-xl font-bold text-slate-800">{activeClass} · Section {shownSection}</h2>
+                <h2>{activeClass} · Section {shownSection}</h2>
+                <small>
+                  {confirm === 'save'
+                    ? `${counts.marked} of ${counts.total} students marked`
+                    : `All ${counts.total} students in this section`}
+                </small>
               </div>
               <button type="button" className="close-button" onClick={() => setConfirm(null)} aria-label="Close"><X size={18} /></button>
             </div>
-            <div className="mt-4 rounded-xl bg-sky-50 px-5 py-4">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance date</span>
-              <p className="mt-1 text-2xl font-bold text-slate-800">{new Date(`${date}T00:00:00`).toLocaleDateString()}</p>
+
+            <div className="att-save-date">
+              <span className="att-save-date-icon"><CalendarCheck2 size={19} /></span>
+              <div>
+                <span className="att-save-date-label">Attendance date</span>
+                <strong>{formatLongDate(date)}</strong>
+                <small>{formatWeekday(date)}</small>
+              </div>
             </div>
-            <p className="mt-3 text-sm text-slate-500">
-              {confirm === 'save'
-                ? `Save ${counts.marked} marked students out of ${counts.total}. Any previously saved record for this date will be updated.`
-                : `Remove attendance records for all ${counts.total} students on this date. This cannot be undone.`}
-            </p>
+
+            {confirm === 'save' ? (
+              <>
+                <div className="att-save-marks">
+                  {marksSaved.map(({ key, label, value, Icon }) => (
+                    <span key={key} className={key}>
+                      <Icon size={14} /> {value} {label}
+                    </span>
+                  ))}
+                </div>
+                <p className="att-save-note">
+                  You are saving <b>{counts.marked}</b> marked {counts.marked === 1 ? 'student' : 'students'} out of <b>{counts.total}</b> in this section.
+                  {hasSavedRecords
+                    ? ' Any previously saved record for this date will be updated.'
+                    : ' Nothing has been saved for this date yet.'}
+                </p>
+                {counts.remaining > 0 && (
+                  <p className="att-save-note warn">
+                    {counts.remaining} {counts.remaining === 1 ? 'student is' : 'students are'} still unmarked and will be left out of this save.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="att-save-note">
+                This removes the attendance record for all <b>{counts.total}</b> students in this section on this date. This cannot be undone.
+              </p>
+            )}
+
             <div className="notice-preview-actions">
               <button type="button" className="secondary-button" onClick={() => setConfirm(null)}>Cancel</button>
               <button type="submit" className={confirm === 'delete' ? 'danger-button' : 'primary-button'} disabled={saving}>
-                {confirm === 'delete' ? <Trash2 size={16} /> : <Check size={16} />} {saving ? 'Working…' : confirm === 'save' ? 'Confirm save' : 'Confirm delete'}
+                {confirm === 'delete' ? <Trash2 size={16} /> : <Check size={16} />}
+                {saving ? 'Working…' : confirm === 'save' ? 'Confirm save' : 'Confirm delete'}
               </button>
             </div>
           </form>
