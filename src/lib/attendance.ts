@@ -16,6 +16,7 @@ export type CalendarDayType = 'holiday' | 'vacation' | 'exam' | 'special_working
 export type CalendarDay = {
   id: string;
   day_date: string;
+  end_date: string;
   day_type: CalendarDayType;
   title: string;
   notes: string | null;
@@ -37,6 +38,26 @@ export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+export const MONTH_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+// A single calendar entry can cover one date or a whole span (a winter break, an
+// exam week). This guards the expansion so a mistyped range can never loop.
+const MAX_SPAN_DAYS = 400;
+
+const formatShortDate = (value: string) => {
+  const date = parseDate(value);
+  if (!date) return value;
+  return `${date.getDate()} ${MONTH_SHORT[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+export function formatDayRange(start: string, end?: string | null) {
+  const last = (end || start).slice(0, 10);
+  if (last === start.slice(0, 10)) return formatShortDate(start);
+  return `${formatShortDate(start)} – ${formatShortDate(last)}`;
+}
 
 // Days the school is closed. A special working day is the opposite: the school
 // opens even though the working-week schedule would normally keep it shut.
@@ -101,6 +122,18 @@ export function isLowAttendance(percentage: number, threshold: number) {
 
 export const isClosedDayType = (type: CalendarDayType) => CLOSED_DAY_TYPES.includes(type);
 
+const addSpan = (target: Set<string>, start: string, end: string) => {
+  const cursor = new Date(`${start.slice(0, 10)}T00:00:00`);
+  const last = new Date(`${(end || start).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime())) return;
+  let guard = 0;
+  while (cursor <= last && guard < MAX_SPAN_DAYS) {
+    target.add(toDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+    guard += 1;
+  }
+};
+
 // The dates the school actually opened in a period: the working week, minus
 // holidays, vacations and exam off days, plus any special working day.
 export function effectiveSchoolDays(
@@ -116,9 +149,11 @@ export function effectiveSchoolDays(
   const closed = new Set<string>();
   const special = new Set<string>();
   for (const day of calendarDays) {
-    const key = day.day_date.slice(0, 10);
-    if (isClosedDayType(day.day_type)) closed.add(key);
-    else special.add(key);
+    addSpan(
+      isClosedDayType(day.day_type) ? closed : special,
+      day.day_date,
+      day.end_date || day.day_date,
+    );
   }
 
   const days: string[] = [];
@@ -161,12 +196,16 @@ export function summariseAttendance(
     else absent += 1;
   }
 
+  const excludeLeave = policy.exclude_leave_from_denominator;
+  // With leave excluded from the total, an approved leave day is not an absence
+  // and is not a day the school counted for that student.
+  const absentTotal = excludeLeave ? absent + leave : absent;
   const presentTotal = present + late;
-  const denominator = policy.exclude_leave_from_denominator ? days.length - leave : days.length;
+  const denominator = excludeLeave ? days.length - leave : days.length;
   return {
     total: denominator,
     present: presentTotal,
-    absent,
+    absent: absentTotal,
     late,
     leave,
     percentage: attendancePercentage(presentTotal, denominator),
@@ -177,13 +216,21 @@ export type DayCounts = { present: number; absent: number; late: number; leave: 
 
 export const EMPTY_DAY_COUNTS: DayCounts = { present: 0, absent: 0, late: 0, leave: 0, marked: 0 };
 
-export function countByStatus(statuses: string[]): DayCounts {
+// A late arrival still counts as a day the student was in school. When the
+// school excludes approved leave from the denominator, a leave day is dropped
+// from both the total and the absent count instead of being held against the
+// student; otherwise it is reported on its own and counted as a day away.
+export function countByStatus(statuses: string[], excludeLeave = false): DayCounts {
   const counts: DayCounts = { ...EMPTY_DAY_COUNTS };
   for (const status of statuses) {
     if (status === 'present') { counts.present += 1; counts.marked += 1; }
     else if (status === 'absent') { counts.absent += 1; counts.marked += 1; }
     else if (status === 'late') { counts.late += 1; counts.marked += 1; }
-    else if (status === 'leave') { counts.leave += 1; counts.marked += 1; }
+    else if (status === 'leave') {
+      counts.leave += 1;
+      counts.marked += 1;
+      if (excludeLeave) { counts.absent += 1; counts.leave -= 1; }
+    }
   }
   return counts;
 }

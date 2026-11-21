@@ -58,7 +58,7 @@ const dayKey = (value: string) => value.slice(0, 10);
 
 type PendingDayChange = {
   date: string;
-  entry: { day_date: string; day_type: CalendarDayType; title: string; notes?: string | null } | null;
+  entry: { day_date: string; end_date: string; day_type: CalendarDayType; title: string; notes?: string | null } | null;
 };
 
 export function AttendanceManager({ students, onToast }: { students: Student[]; onToast: (message: string) => void }) {
@@ -156,7 +156,10 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
   );
 
   const counts = useMemo(() => {
-    const marked = countByStatus(sectionStudents.map((student) => statusOf(student.id)).filter(Boolean) as string[]);
+    const marked = countByStatus(
+      sectionStudents.map((student) => statusOf(student.id)).filter(Boolean) as string[],
+      policy.exclude_leave_from_denominator,
+    );
     return {
       total: sectionStudents.length,
       marked: marked.marked,
@@ -166,13 +169,13 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
       leave: marked.leave,
       remaining: sectionStudents.length - marked.marked,
     };
-  }, [sectionStudents, statusOf]);
+  }, [sectionStudents, statusOf, policy.exclude_leave_from_denominator]);
 
   // One row per class group for the selected date, used by the overview panel.
   const submissions = useMemo<ClassSubmission[]>(() => distinctSections.map((section) => {
     const list = students.filter((s) => s.class_name === section.class_name && s.section_name === section.section_name);
     const marks = list.map((student) => storedMarks.get(student.id)).filter(Boolean) as string[];
-    const tally = countByStatus(marks);
+    const tally = countByStatus(marks, policy.exclude_leave_from_denominator);
     return {
       key: `${section.class_name}|||${section.section_name}`,
       class_name: section.class_name,
@@ -185,7 +188,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
       leave: tally.leave,
       complete: list.length > 0 && tally.marked === list.length,
     };
-  }), [distinctSections, students, storedMarks]);
+  }), [distinctSections, students, storedMarks, policy.exclude_leave_from_denominator]);
 
   const term = rosterQuery.trim().toLowerCase();
   const shownStudents = (absenteesOnly ? absentees : sectionStudents)
@@ -259,18 +262,19 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
       onToast(`${value} reopened as a school day. Save the policy to keep this.`);
       return;
     }
-    const entry = { day_date: value, day_type: 'holiday' as const, title: 'School off', notes: null };
+    const entry = { day_date: value, end_date: value, day_type: 'holiday' as const, title: 'School off', notes: null };
     setCalendarDays((current) => [...current, { id: `pending-${value}`, ...entry }]);
     setPendingDays((current) => [...current.filter((item) => item.date !== value), { date: value, entry }]);
     onToast(`${value} marked as an off day. Save the policy to keep this.`);
   };
 
-  const addCalendarEntry = (entry: { day_date: string; day_type: CalendarDayType; title: string; notes?: string | null }) => {
+  const addCalendarEntry = (entry: { day_date: string; end_date: string; day_type: CalendarDayType; title: string; notes?: string | null }) => {
     setCalendarDays((current) => [
       ...current.filter((day) => dayKey(day.day_date) !== entry.day_date),
       {
         id: `pending-${entry.day_date}`,
         day_date: entry.day_date,
+        end_date: entry.end_date,
         day_type: entry.day_type,
         title: entry.title.trim() || 'School closed',
         notes: entry.notes?.trim() ? entry.notes.trim() : null,

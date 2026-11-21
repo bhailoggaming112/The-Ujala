@@ -6,7 +6,7 @@ import {
   type CalendarPolicy,
 } from '@/lib/attendance';
 
-const CALENDAR_DAY_COLUMNS = 'id, day_date, day_type, title, notes';
+const CALENDAR_DAY_COLUMNS = 'id, day_date, end_date, day_type, title, notes';
 
 export type SchoolCalendar = {
   policy: CalendarPolicy;
@@ -71,7 +71,7 @@ export async function saveCalendarPolicy(policy: CalendarPolicy, userId: string 
 }
 
 export async function saveCalendarDay(
-  entry: { day_date: string; day_type: CalendarDayType; title: string; notes?: string | null },
+  entry: { day_date: string; end_date: string; day_type: CalendarDayType; title: string; notes?: string | null },
   userId: string | null,
 ): Promise<string | null> {
   try {
@@ -80,6 +80,7 @@ export async function saveCalendarDay(
       .upsert(
         {
           day_date: entry.day_date,
+          end_date: entry.end_date < entry.day_date ? entry.day_date : entry.end_date,
           day_type: entry.day_type,
           title: entry.title.trim() || 'School closed',
           notes: entry.notes?.trim() ? entry.notes.trim() : null,

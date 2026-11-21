@@ -1,32 +1,15 @@
 import { useEffect, useState } from 'react';
-import { CalendarPlus, Info, MousePointerClick, Percent, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { CalendarPlus, CalendarRange, Info, MousePointerClick, Percent, Plus, Save, ShieldCheck } from 'lucide-react';
 import {
   ALL_WEEKDAYS, CALENDAR_DAY_LABELS, MONTH_NAMES, WEEKDAY_LABELS, WEEKDAY_SHORT,
-  isClosedDayType, toDateKey, todayKey,
+  formatDayRange, isClosedDayType, toDateKey, todayKey,
   type CalendarDay, type CalendarDayType, type CalendarPolicy,
 } from '@/lib/attendance';
+import { CalendarHistoryList } from '@/components/CalendarHistory';
 
-type CalendarForm = { date: string; title: string; notes: string };
+type CalendarForm = { start: string; end: string; title: string; notes: string };
 
-const emptyForm = (): CalendarForm => ({ date: '', title: '', notes: '' });
-
-const formatDay = (value: string) =>
-  new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-  });
-
-const groupByMonth = (days: CalendarDay[]) => {
-  const groups: { key: string; label: string; items: CalendarDay[] }[] = [];
-  for (const day of [...days].sort((a, b) => a.day_date.localeCompare(b.day_date))) {
-    const date = new Date(`${day.day_date.slice(0, 10)}T00:00:00`);
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    const label = `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
-    const last = groups[groups.length - 1];
-    if (last && last.key === key) last.items.push(day);
-    else groups.push({ key, label, items: [day] });
-  }
-  return groups;
-};
+const emptyForm = (): CalendarForm => ({ start: '', end: '', title: '', notes: '' });
 
 type Props = {
   policy: CalendarPolicy;
@@ -34,7 +17,7 @@ type Props = {
   saving: boolean;
   onPolicyChange: (policy: CalendarPolicy) => void;
   onSavePolicy: () => void;
-  onAddDay: (entry: { day_date: string; day_type: CalendarDayType; title: string; notes?: string | null }) => void;
+  onAddDay: (entry: { day_date: string; end_date: string; day_type: CalendarDayType; title: string; notes?: string | null }) => void;
   onRemoveDay: (dayDate: string) => void;
   onToast: (message: string) => void;
 };
@@ -71,43 +54,59 @@ export function SchoolCalendarSettings({
   };
 
   const addDay = (type: CalendarDayType, form: CalendarForm, reset: () => void, label: string) => {
-    if (!form.date) { onToast(`Choose the date for the ${label.toLowerCase()} first.`); return; }
-    if (form.date < todayKey()) { onToast('Choose today or a future date.'); return; }
-    onAddDay({ day_date: form.date, day_type: type, title: form.title, notes: form.notes });
+    if (!form.start) { onToast(`Choose the start date for the ${label.toLowerCase()} first.`); return; }
+    const end = form.end || form.start;
+    if (end < form.start) { onToast('The end date cannot be before the start date.'); return; }
+    if (form.start < todayKey()) { onToast('Choose today or a future date.'); return; }
+    onAddDay({ day_date: form.start, end_date: end, day_type: type, title: form.title, notes: form.notes });
     reset();
   };
 
-  const renderList = (items: CalendarDay[], emptyText: string) => {
-    if (items.length === 0) return <p className="cal-empty">{emptyText}</p>;
+  const weekdayTiles = showAllWeekdays ? ALL_WEEKDAYS : policy.working_days;
+
+  const renderForm = (type: CalendarDayType, form: CalendarForm, setForm: (next: CalendarForm) => void, label: string, buttonLabel: string) => {
+    const span = form.start && form.end && form.end !== form.start;
     return (
-      <div className="cal-list">
-        {groupByMonth(items).map((group) => (
-          <div className="cal-month" key={group.key}>
-            <span className="cal-month-label">{group.label}</span>
-            {group.items.map((day) => (
-              <div className={`cal-item ${day.day_type}`} key={day.id}>
-                <span className="cal-item-date">{formatDay(day.day_date)}</span>
-                <span className="cal-item-copy">
-                  <strong>{day.title}</strong>
-                  <small>{CALENDAR_DAY_LABELS[day.day_type]}{day.notes ? ` · ${day.notes}` : ''}</small>
-                </span>
-                <button
-                  type="button"
-                  className="cal-item-remove"
-                  aria-label={`Remove ${day.title}`}
-                  onClick={() => onRemoveDay(day.day_date.slice(0, 10))}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        ))}
+      <div className="cal-form">
+        <label className="control-field">Start Date
+          <input type="date" value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value, end: form.end && form.end < event.target.value ? event.target.value : form.end })} />
+        </label>
+        <label className="control-field">End Date
+          <input type="date" value={form.end || form.start} min={form.start || undefined} onChange={(event) => setForm({ ...form, end: event.target.value })} />
+        </label>
+        <label className="control-field">Title
+          <input
+            value={form.title}
+            placeholder={type === 'holiday' ? 'Eid holidays, Independence Day…' : 'Sports day, make-up class…'}
+            onChange={(event) => setForm({ ...form, title: event.target.value })}
+          />
+        </label>
+        <label className="control-field">Notes (optional)
+          <input
+            value={form.notes}
+            placeholder={type === 'holiday' ? 'Office open for staff only' : 'Half day, exams only'}
+            onChange={(event) => setForm({ ...form, notes: event.target.value })}
+          />
+        </label>
+        <div className="cal-form-foot">
+          <span className="cal-form-hint">
+            {form.start
+              ? (span
+                ? <><CalendarRange size={13} /> One saved entry covering {formatDayRange(form.start, form.end)}</>
+                : <><Info size={13} /> Leave the end date as it is for a single day.</>)
+              : <><Info size={13} /> Pick a start date. Set an end date for a multi-day span.</>}
+          </span>
+          <button
+            type="button"
+            className="secondary-button cal-add-button"
+            onClick={() => addDay(type, form, () => setForm(emptyForm()), label)}
+          >
+            {type === 'holiday' ? <CalendarPlus size={16} /> : <Plus size={16} />} {buttonLabel}
+          </button>
+        </div>
       </div>
     );
   };
-
-  const weekdayTiles = showAllWeekdays ? ALL_WEEKDAYS : policy.working_days;
 
   return (
     <div className="cal-settings">
@@ -201,31 +200,21 @@ export function SchoolCalendarSettings({
             <div className="cal-panel-copy">
               <span className="eyebrow">Closed days</span>
               <h2>School Vacations &amp; Public Holidays</h2>
-              <p>Add every closed day so it is left out of the attendance count instead of being treated as an absence.</p>
+              <p>Add every closed day so it is left out of the attendance count instead of being treated as an absence. One entry can cover a whole break.</p>
             </div>
             <span className="cal-count">{holidays.length}</span>
           </div>
 
-          <div className="cal-form">
-            <label className="control-field">Date
-              <input type="date" value={holidayForm.date} onChange={(event) => setHolidayForm((current) => ({ ...current, date: event.target.value }))} />
-            </label>
-            <label className="control-field">Title
-              <input value={holidayForm.title} placeholder="Eid holidays, Independence Day…" onChange={(event) => setHolidayForm((current) => ({ ...current, title: event.target.value }))} />
-            </label>
-            <label className="control-field">Notes (optional)
-              <input value={holidayForm.notes} placeholder="Office open for staff only" onChange={(event) => setHolidayForm((current) => ({ ...current, notes: event.target.value }))} />
-            </label>
-            <button
-              type="button"
-              className="secondary-button cal-add-button"
-              onClick={() => addDay('holiday', holidayForm, () => setHolidayForm(emptyForm()), 'Holiday')}
-            >
-              <CalendarPlus size={16} /> Add Vacation / Holiday
-            </button>
-          </div>
+          {renderForm('holiday', holidayForm, setHolidayForm, 'Holiday', 'Add Vacation / Holiday')}
 
-          {renderList(holidays, 'No vacations or public holidays added yet.')}
+          <div className="cal-history">
+            <span className="cal-history-title">Saved history</span>
+            <CalendarHistoryList
+              days={holidays}
+              emptyText="No vacations or public holidays added yet."
+              onRemove={onRemoveDay}
+            />
+          </div>
         </div>
 
         <div className="panel cal-panel">
@@ -238,26 +227,16 @@ export function SchoolCalendarSettings({
             <span className="cal-count special">{specials.length}</span>
           </div>
 
-          <div className="cal-form">
-            <label className="control-field">Date
-              <input type="date" value={specialForm.date} onChange={(event) => setSpecialForm((current) => ({ ...current, date: event.target.value }))} />
-            </label>
-            <label className="control-field">Title
-              <input value={specialForm.title} placeholder="Sports day, make-up class…" onChange={(event) => setSpecialForm((current) => ({ ...current, title: event.target.value }))} />
-            </label>
-            <label className="control-field">Notes (optional)
-              <input value={specialForm.notes} placeholder="Half day, exams only" onChange={(event) => setSpecialForm((current) => ({ ...current, notes: event.target.value }))} />
-            </label>
-            <button
-              type="button"
-              className="secondary-button cal-add-button"
-              onClick={() => addDay('special_working', specialForm, () => setSpecialForm(emptyForm()), 'Special working day')}
-            >
-              <Plus size={16} /> Add Special Working Day
-            </button>
-          </div>
+          {renderForm('special_working', specialForm, setSpecialForm, 'Special working day', 'Add Special Working Day')}
 
-          {renderList(specials, 'No special working days added yet.')}
+          <div className="cal-history">
+            <span className="cal-history-title">Saved history</span>
+            <CalendarHistoryList
+              days={specials}
+              emptyText="No special working days added yet."
+              onRemove={onRemoveDay}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -279,8 +258,21 @@ export function CalendarDayGrid({ month, days, workingDays, onToggle }: DayGridP
 
   const firstDay = new Date(year, monthNumber - 1, 1).getDay();
   const totalDays = new Date(year, monthNumber, 0).getDate();
-  const byDate = new Map(days.map((day) => [day.day_date.slice(0, 10), day]));
   const today = todayKey();
+
+  // A date can sit inside a multi-day entry, so every covered date is expanded
+  // and the most recent entry wins when spans overlap.
+  const byDate = new Map<string, CalendarDay>();
+  for (const day of days) {
+    const cursor = new Date(`${day.day_date.slice(0, 10)}T00:00:00`);
+    const last = new Date(`${(day.end_date || day.day_date).slice(0, 10)}T00:00:00`);
+    let guard = 0;
+    while (cursor <= last && guard < 400) {
+      byDate.set(toDateKey(cursor), day);
+      cursor.setDate(cursor.getDate() + 1);
+      guard += 1;
+    }
+  }
 
   const cells: (string | null)[] = [
     ...Array.from({ length: firstDay }, () => null),
@@ -311,7 +303,7 @@ export function CalendarDayGrid({ month, days, workingDays, onToggle }: DayGridP
               type="button"
               key={date}
               className={`cal-cell ${state}${date === today ? ' today' : ''}`}
-              title={entry ? `${entry.title} — ${CALENDAR_DAY_LABELS[entry.day_type]}` : 'Tap to mark this date as an off day'}
+              title={entry ? `${entry.title} — ${CALENDAR_DAY_LABELS[entry.day_type]} (${formatDayRange(entry.day_date, entry.end_date)})` : 'Tap to mark this date as an off day'}
               onClick={() => onToggle(date)}
             >
               <span>{Number(date.slice(8, 10))}</span>
