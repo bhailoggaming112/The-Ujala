@@ -1874,3 +1874,90 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 @media print {
   .accountant-page .module-heading, .fee-tabs, .fee-quick, .fee-alert { display: none !important; }
 }
+
+/* Neon digital clock in the header ------------------------------------------- */
+.neon-clock {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 7px 15px;
+  border-radius: 14px;
+  background: radial-gradient(130% 150% at 12% -20%, #143b52 0%, #0b1c2b 46%, #0a0f1f 100%);
+  box-shadow: 0 6px 20px rgba(10, 22, 38, .28), inset 0 1px 0 rgba(255, 255, 255, .07);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+/* A slow drifting sheen so the pill feels alive without being distracting. */
+.neon-clock-glow {
+  position: absolute;
+  inset: -40% -10%;
+  background:
+    radial-gradient(42% 60% at 18% 24%, rgba(0, 245, 212, .28), transparent 70%),
+    radial-gradient(38% 58% at 84% 78%, rgba(232, 121, 249, .22), transparent 72%);
+  animation: neon-drift 9s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.neon-clock-face { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.neon-clock-time {
+  display: flex;
+  align-items: baseline;
+  font: 700 17px/1 'DM Sans', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .5px;
+  color: #00f5d4;
+  text-shadow: 0 0 6px rgba(0, 245, 212, .85), 0 0 16px rgba(0, 245, 212, .4);
+}
+.neon-clock-colon { font-style: normal; padding: 0 1px; animation: neon-blink 2s steps(1, end) infinite; }
+.neon-clock-seconds { color: #38bdf8; text-shadow: 0 0 6px rgba(56, 189, 248, .85), 0 0 16px rgba(56, 189, 248, .4); }
+.neon-clock-meridiem {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-left: 5px;
+  color: #e879f9;
+  text-shadow: 0 0 7px rgba(232, 121, 249, .8);
+}
+.neon-clock-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: .3px;
+  color: #b7d9e6;
+  white-space: nowrap;
+}
+.neon-clock-date b { color: #39ff14; font-weight: 700; text-shadow: 0 0 7px rgba(57, 255, 20, .55); }
+.neon-clock-dot { width: 3px; height: 3px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
+
+@keyframes neon-drift {
+  from { transform: translate3d(-6%, -4%, 0) scale(1); opacity: .75; }
+  to { transform: translate3d(6%, 5%, 0) scale(1.12); opacity: 1; }
+}
+@keyframes neon-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: .28; } }
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .neon-clock-glow { animation: none; }
+  .neon-clock-colon { animation: none; }
+}
+
+@media (max-width: 1100px) {
+  .neon-clock { padding: 6px 12px; }
+  .neon-clock-time { font-size: 15px; }
+  .neon-clock-date { font-size: 9px; }
+}
+/* On narrow screens the date line is dropped first, then the breadcrumb, and
+   finally the clock itself, so the header keeps one row and never overflows. */
+@media (max-width: 760px) {
+  .neon-clock-date { display: none; }
+}
+@media (max-width: 560px) {
+  .topbar .breadcrumb { display: none; }
+}
+@media (max-width: 430px) {
+  .neon-clock { display: none; }
+}
+
+@media print {
+  .neon-clock { display: none !important; }
+}
