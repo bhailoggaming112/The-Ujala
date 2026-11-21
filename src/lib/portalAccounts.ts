@@ -82,6 +82,19 @@ export async function setAccountPassword(userId: string, password: string): Prom
   }
 }
 
+export async function setAccountUsername(userId: string, username: string): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase.rpc('admin_reset_username', {
+      p_user_id: userId,
+      p_username: username.trim().toLowerCase(),
+    });
+    if (error) return { error: friendly(error.message, 'The username could not be changed.') };
+    return { error: null };
+  } catch {
+    return { error: 'Could not reach the school server. Check your connection and try again.' };
+  }
+}
+
 export async function changeOwnPassword(password: string): Promise<{ error: string | null }> {
   try {
     const { error } = await supabase.auth.updateUser({ password });

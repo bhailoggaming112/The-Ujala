@@ -95,8 +95,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: usernameToEmail(username),
         password,
       });
-      if (error) return { error: 'Invalid username or password.' };
-      return { error: null };
+      if (!error) return { error: null };
+
+      // Only a genuine rejection is reported as a wrong username or password. A
+      // server-side failure is a fault in the account or the school server, and
+      // saying "invalid password" for it would send people chasing the wrong
+      // problem. Supabase returns no code or a 5xx status for those.
+      const rejected = error.status === 400 || error.code === 'invalid_credentials';
+      if (rejected) return { error: 'Invalid username or password.' };
+      return { error: 'Sign-in is not working right now. Please ask the school office to check this account.' };
     } catch {
       return { error: 'Could not reach the school server. Check your connection and try again.' };
     }

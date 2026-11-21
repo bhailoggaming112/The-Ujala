@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
-  AlertCircle, Ban, Check, KeyRound, Loader2, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users, X,
+  AlertCircle, Ban, Check, KeyRound, Loader2, Plus, RefreshCw, Search, Shield, Trash2, UserCog, UserPlus, Users, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth, type UserProfile, type UserRole } from '@/lib/auth';
@@ -14,6 +14,7 @@ import {
   provisionPortalAccount,
   resolvePasswordRequest,
   setAccountPassword,
+  setAccountUsername,
   usernameFromMobile,
   type PasswordRequest,
   type PortalCredentials,
@@ -40,6 +41,7 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
   const [links, setLinks] = useState<Record<string, string[]>>({});
   const [studentUsernames, setStudentUsernames] = useState<Record<string, string>>({});
   const [resetTarget, setResetTarget] = useState<UserProfile | null>(null);
+  const [usernameTarget, setUsernameTarget] = useState<UserProfile | null>(null);
   const [credentials, setCredentials] = useState<PortalCredentials[] | null>(null);
   const [requests, setRequests] = useState<PasswordRequest[]>([]);
 
@@ -243,13 +245,22 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
                       {u.id !== profile?.id && (
                         <>
                           {u.role !== 'admin' && (
-                            <button
-                              className="row-action-btn"
-                              onClick={() => setResetTarget(u)}
-                              title="Set a new password"
-                            >
-                              <KeyRound size={15} />
-                            </button>
+                            <>
+                              <button
+                                className="row-action-btn"
+                                onClick={() => setResetTarget(u)}
+                                title="Set a new password"
+                              >
+                                <KeyRound size={15} />
+                              </button>
+                              <button
+                                className="row-action-btn"
+                                onClick={() => setUsernameTarget(u)}
+                                title="Change the username"
+                              >
+                                <UserCog size={15} />
+                              </button>
+                            </>
                           )}
                           <button
                             className="row-action-btn"
@@ -301,6 +312,14 @@ export function AdminPanel({ onToast }: { onToast: (message: string) => void }) 
         <ResetPasswordModal
           user={resetTarget}
           onClose={() => setResetTarget(null)}
+          onToast={onToast}
+        />
+      )}
+      {usernameTarget && (
+        <ResetUsernameModal
+          user={usernameTarget}
+          onClose={() => setUsernameTarget(null)}
+          onSaved={() => { setUsernameTarget(null); void loadUsers(); }}
           onToast={onToast}
         />
       )}
@@ -496,6 +515,60 @@ function ResetPasswordModal({ user, onClose, onToast }: {
             <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary-button" disabled={busy}>
               {busy ? <Loader2 size={16} className="auth-spinner" /> : <KeyRound size={16} />} Set password
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ResetUsernameModal({ user, onClose, onSaved, onToast }: {
+  user: UserProfile;
+  onClose: () => void;
+  onSaved: () => void;
+  onToast: (message: string) => void;
+}) {
+  const [username, setUsername] = useState(user.username);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const cleanUsername = username.trim().toLowerCase();
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (cleanUsername.length < 3) { setError('The username must be at least 3 characters.'); return; }
+    if (cleanUsername === user.username) { setError('That is already this account\'s username.'); return; }
+    setBusy(true);
+
+    const { error: renameError } = await setAccountUsername(user.id, cleanUsername);
+    if (renameError) { setError(renameError); setBusy(false); return; }
+
+    onToast(`${user.full_name} now signs in as ${cleanUsername}.`);
+    onSaved();
+  };
+
+  return (
+    <div className="notice-overlay" onClick={onClose}>
+      <section className="notice-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="notice-preview-top">
+          <span className="eyebrow"><UserCog size={14} /> Change username</span>
+          <button className="close-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        </div>
+        <h2 className="mt-3 text-lg font-bold text-slate-800">Change the sign-in username</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {user.full_name} currently signs in as <strong>{user.username}</strong>. The new username replaces it straight
+          away; the password stays the same.
+        </p>
+        <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
+          <label className="control-field">New username
+            <input value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus maxLength={40} />
+          </label>
+          {error && <div className="auth-error"><AlertCircle size={16} /><span>{error}</span></div>}
+          <div className="notice-preview-actions">
+            <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-button" disabled={busy}>
+              {busy ? <Loader2 size={16} className="auth-spinner" /> : <UserCog size={16} />} Save username
             </button>
           </div>
         </form>
