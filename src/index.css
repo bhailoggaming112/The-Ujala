@@ -19,12 +19,6 @@ button { cursor: pointer; }
 .brand-mark { width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .brand-mark img { width: 38px; height: 38px; object-fit: contain; }
 .brand-accent { color: #40a7c8; }
-.school-switcher { display: flex; gap: 9px; align-items: center; padding: 10px; background: #f4f9fc; border-radius: 14px; margin: 0 4px 24px; color: #7d92a1; }
-.school-switcher strong, .school-switcher span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.school-switcher strong { color: #375064; font-size: 12px; margin-bottom: 3px; }
-.school-switcher span { font-size: 10px; }
-.school-switcher > svg { margin-left: auto; }
-.school-avatar { width: 33px; height: 33px; border-radius: 10px; display: grid; place-items: center; background: #9dd6e9; color: #24637d; font: 700 11px 'Plus Jakarta Sans'; }
 .nav-label { color: #a6b4be; text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; padding: 0 13px; margin: 0 0 8px; }
 .nav-label-spaced { margin-top: 25px; }
 .nav-button { border: 0; background: transparent; color: #718593; width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 13px; border-radius: 11px; text-align: left; font-size: 13px; margin: 2px 0; transition: .2s ease; }
@@ -376,7 +370,7 @@ button { cursor: pointer; }
 @media (max-width: 1100px) { .detail-search-grid { grid-template-columns: repeat(3, 1fr); }.admission-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .search-panel { padding: 17px; }.search-panel-heading { flex-direction: column; gap: 13px; }.filter-section { display: block; }.filter-section-label { margin-bottom: 9px; }.detail-search-grid { grid-template-columns: repeat(2, 1fr); }.search-actions { align-items: stretch; }.action-divider { display: none; }.notice-actions { width: 100%; margin-left: 0; }.notice-actions select { flex: 1; }.quick-notice-bar { align-items: start; flex-direction: column; gap: 13px; }.quick-notice-buttons { width: 100%; }.quick-notice-buttons button { flex: 1; justify-content: center; }.settings-intro { align-items: start; flex-wrap: wrap; }.settings-intro .primary-button { width: 100%; }.template-card-grid, .template-language-grid { grid-template-columns: 1fr; }.search-results-heading { align-items: start; flex-direction: column; gap: 6px; } }
 @media (max-width: 1100px) { .sidebar { width: 220px; }.page { padding-left: 27px; padding-right: 27px; }.topbar { padding: 0 27px; }.module-grid { grid-template-columns: repeat(3, 1fr); }.stats-row { grid-template-columns: repeat(2, 1fr); }.school-illustration { opacity: .7; } }
-@media (max-width: 760px) { .sidebar { width: 68px; padding: 20px 9px; }.brand { padding: 0 8px 28px; }.brand > span, .school-switcher > div:not(.school-avatar), .school-switcher > svg, .nav-label, .nav-button span:not(.nav-count), .help-card, .settings-link { display: none; }.school-switcher { margin: 0 0 24px; padding: 0; background: none; justify-content: center; }.nav-button { justify-content: center; padding: 12px 0; }.nav-count { position: absolute; margin: -23px -24px 0 0; }.topbar { padding: 0 16px; height: 65px; }.breadcrumb span:first-child, .crumb-separator { display: none; }.profile-button span, .profile-button > svg { display: none; }.page { padding: 25px 16px 45px; }.welcome-banner { min-height: 218px; padding: 25px 22px; }.welcome-banner h1 { font-size: 26px; max-width: 300px; }.school-illustration { left: 0; opacity: .32; }.stats-row { gap: 9px; margin: 16px 0 27px; }.stat-card { padding: 12px; gap: 8px; }.stat-icon { width: 33px; height: 33px; }.stat-card strong { font-size: 18px; }.stat-card > div:last-child > span { font-size: 10px; }.stat-card small { font-size: 9px; }.module-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }.module-card { min-height: 130px; padding: 14px; }.module-grid .module-card:last-child { grid-column: span 2; }.overview-grid, .report-grid { grid-template-columns: 1fr; }.attendance-content { gap: 20px; }.donut { width: 135px; height: 135px; }.section-heading h2 { font-size: 18px; }.module-heading { align-items: start; flex-direction: column; gap: 15px; }.module-heading h1 { font-size: 27px; }.search-field { width: 100%; }.table-toolbar { align-items: stretch; flex-direction: column; }.form-grid, .admission-info-grid { grid-template-columns: 1fr; }.form-heading { flex-wrap: wrap; gap: 14px; }.form-heading-side { flex-wrap: wrap; }.form-footer { align-items: stretch; flex-direction: column; gap: 15px; }.form-footer div { justify-content: end; }.section-cards, .tool-grid { grid-template-columns: 1fr; }.section-workspace { grid-template-columns: 1fr; }.selectable-row { align-items: start; }.context-tag { display: none; }.attendance-toolbar { align-items: start; flex-direction: column; gap: 11px; }.att-filters { flex-direction: column; align-items: stretch; }.att-filters .control-field, .att-filter-check { width: 100%; }.att-filter-check { justify-content: center; }.att-summary { align-items: stretch; flex-direction: column; }.att-summary .search-field { width: 100%; }.att-actions { width: 100%; }.att-actions button { flex: 1; justify-content: center; } }
+@media (max-width: 760px) { .sidebar { width: 68px; padding: 20px 9px; }.brand { padding: 0 8px 28px; }.brand > span, .nav-label, .nav-button span:not(.nav-count), .help-card, .settings-link { display: none; }.nav-button { justify-content: center; padding: 12px 0; }.nav-count { position: absolute; margin: -23px -24px 0 0; }.topbar { padding: 0 16px; height: 65px; }.breadcrumb span:first-child, .crumb-separator { display: none; }.profile-button span, .profile-button > svg { display: none; }.page { padding: 25px 16px 45px; }.welcome-banner { min-height: 218px; padding: 25px 22px; }.welcome-banner h1 { font-size: 26px; max-width: 300px; }.school-illustration { left: 0; opacity: .32; }.stats-row { gap: 9px; margin: 16px 0 27px; }.stat-card { padding: 12px; gap: 8px; }.stat-icon { width: 33px; height: 33px; }.stat-card strong { font-size: 18px; }.stat-card > div:last-child > span { font-size: 10px; }.stat-card small { font-size: 9px; }.module-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }.module-card { min-height: 130px; padding: 14px; }.module-grid .module-card:last-child { grid-column: span 2; }.overview-grid, .report-grid { grid-template-columns: 1fr; }.attendance-content { gap: 20px; }.donut { width: 135px; height: 135px; }.section-heading h2 { font-size: 18px; }.module-heading { align-items: start; flex-direction: column; gap: 15px; }.module-heading h1 { font-size: 27px; }.search-field { width: 100%; }.table-toolbar { align-items: stretch; flex-direction: column; }.form-grid, .admission-info-grid { grid-template-columns: 1fr; }.form-heading { flex-wrap: wrap; gap: 14px; }.form-heading-side { flex-wrap: wrap; }.form-footer { align-items: stretch; flex-direction: column; gap: 15px; }.form-footer div { justify-content: end; }.section-cards, .tool-grid { grid-template-columns: 1fr; }.section-workspace { grid-template-columns: 1fr; }.selectable-row { align-items: start; }.context-tag { display: none; }.attendance-toolbar { align-items: start; flex-direction: column; gap: 11px; }.att-filters { flex-direction: column; align-items: stretch; }.att-filters .control-field, .att-filter-check { width: 100%; }.att-filter-check { justify-content: center; }.att-summary { align-items: stretch; flex-direction: column; }.att-summary .search-field { width: 100%; }.att-actions { width: 100%; }.att-actions button { flex: 1; justify-content: center; } }
 
 /* ==========================================================================
    Depth & motion layer
@@ -1875,64 +1869,79 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .accountant-page .module-heading, .fee-tabs, .fee-quick, .fee-alert { display: none !important; }
 }
 
-/* Neon digital clock in the header ------------------------------------------- */
+/* Neon digital clock in the sidebar ------------------------------------------
+   It sits where the profile box used to be, so it keeps that box's footprint:
+   the same width, and the same radius and rhythm as the rest of the sidebar.
+   The shell stays light glass so it belongs on the white rail, while the text
+   and the hairline border carry the neon colour and glow. */
 .neon-clock {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 7px 15px;
+  gap: 3px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  margin: 0 4px 24px;
+  border: 1px solid rgba(0, 245, 212, .5);
   border-radius: 14px;
-  background: radial-gradient(130% 150% at 12% -20%, #143b52 0%, #0b1c2b 46%, #0a0f1f 100%);
-  box-shadow: 0 6px 20px rgba(10, 22, 38, .28), inset 0 1px 0 rgba(255, 255, 255, .07);
+  background: linear-gradient(145deg, rgba(255, 255, 255, .94), rgba(233, 249, 252, .78));
+  box-shadow:
+    0 6px 18px rgba(23, 91, 111, .1),
+    0 0 14px rgba(0, 245, 212, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
   overflow: hidden;
   flex: 0 0 auto;
 }
-/* A slow drifting sheen so the pill feels alive without being distracting. */
+/* A slow drifting sheen so the glass feels alive without being distracting. */
 .neon-clock-glow {
   position: absolute;
   inset: -40% -10%;
   background:
-    radial-gradient(42% 60% at 18% 24%, rgba(0, 245, 212, .28), transparent 70%),
+    radial-gradient(42% 60% at 18% 24%, rgba(0, 245, 212, .3), transparent 70%),
     radial-gradient(38% 58% at 84% 78%, rgba(232, 121, 249, .22), transparent 72%);
   animation: neon-drift 9s ease-in-out infinite alternate;
   pointer-events: none;
 }
-.neon-clock-face { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.neon-clock-face { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; }
 .neon-clock-time {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   font: 700 17px/1 'DM Sans', sans-serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: .5px;
-  color: #00f5d4;
-  text-shadow: 0 0 6px rgba(0, 245, 212, .85), 0 0 16px rgba(0, 245, 212, .4);
+  color: #067f70;
+  text-shadow: 0 0 7px rgba(0, 245, 212, .7), 0 0 15px rgba(0, 245, 212, .3);
 }
 .neon-clock-colon { font-style: normal; padding: 0 1px; animation: neon-blink 2s steps(1, end) infinite; }
-.neon-clock-seconds { color: #38bdf8; text-shadow: 0 0 6px rgba(56, 189, 248, .85), 0 0 16px rgba(56, 189, 248, .4); }
+.neon-clock-seconds { color: #0b6ea8; text-shadow: 0 0 7px rgba(56, 189, 248, .75), 0 0 15px rgba(56, 189, 248, .3); }
 .neon-clock-meridiem {
   font-style: normal;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 1px;
   margin-left: 5px;
-  color: #e879f9;
-  text-shadow: 0 0 7px rgba(232, 121, 249, .8);
+  color: #a121b5;
+  text-shadow: 0 0 7px rgba(232, 121, 249, .7);
 }
 .neon-clock-date {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  max-width: 100%;
   font-size: 10px;
   letter-spacing: .3px;
-  color: #b7d9e6;
+  color: #4a6472;
   white-space: nowrap;
 }
-.neon-clock-date b { color: #39ff14; font-weight: 700; text-shadow: 0 0 7px rgba(57, 255, 20, .55); }
-.neon-clock-dot { width: 3px; height: 3px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
+.neon-clock-date b { color: #26703a; font-weight: 700; text-shadow: 0 0 7px rgba(57, 255, 20, .5); }
+.neon-clock-dot { flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: #0b6ea8; box-shadow: 0 0 6px rgba(56, 189, 248, .9); }
 
 @keyframes neon-drift {
-  from { transform: translate3d(-6%, -4%, 0) scale(1); opacity: .75; }
-  to { transform: translate3d(6%, 5%, 0) scale(1.12); opacity: 1; }
+  from { transform: translate3d(-6%, -4%, 0) scale(1); opacity: .55; }
+  to { transform: translate3d(6%, 5%, 0) scale(1.12); opacity: .95; }
 }
 @keyframes neon-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: .28; } }
 
@@ -1942,20 +1951,20 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 }
 
 @media (max-width: 1100px) {
-  .neon-clock { padding: 6px 12px; }
+  .neon-clock { padding: 9px 8px; }
   .neon-clock-time { font-size: 15px; }
-  .neon-clock-date { font-size: 9px; }
+  .neon-clock-date { font-size: 9px; gap: 4px; }
 }
-/* On narrow screens the date line is dropped first, then the breadcrumb, and
-   finally the clock itself, so the header keeps one row and never overflows. */
+/* On the collapsed icon rail the date line goes and the time stacks into a
+   narrow chip, so the clock still reads without widening the rail. */
 @media (max-width: 760px) {
+  .neon-clock { padding: 8px 3px; margin: 0 0 18px; border-radius: 12px; }
   .neon-clock-date { display: none; }
-}
-@media (max-width: 560px) {
-  .topbar .breadcrumb { display: none; }
+  .neon-clock-time { flex-wrap: wrap; font-size: 10px; letter-spacing: 0; }
+  .neon-clock-meridiem { flex-basis: 100%; text-align: center; margin: 2px 0 0; font-size: 8px; }
 }
 @media (max-width: 430px) {
-  .neon-clock { display: none; }
+  .neon-clock-time { font-size: 9px; }
 }
 
 @media print {

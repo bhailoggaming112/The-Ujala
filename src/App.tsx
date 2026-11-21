@@ -185,7 +185,7 @@ function AppInner() {
       <div className="app-shell">
         <aside className="sidebar">
           <div className="brand"><div className="brand-mark"><img src="/New_LOGO_Final.PNG" alt="SchoolDesk" /></div><span>School<span className="brand-accent">Desk</span></span></div>
-          <div className="school-switcher"><div className="school-avatar">{initials}</div><div><strong>{profile.full_name}</strong><span>{roleLabel} account</span></div></div>
+          <NeonClock />
           <p className="nav-label">Accounts office</p>
           <nav>
             {accountantNavItems.map((item) => {
@@ -200,7 +200,7 @@ function AppInner() {
           <div className="sidebar-footer"><button className="settings-link" onClick={() => void signOut()}><LogOut size={17} /> Logout</button></div>
         </aside>
         <main className="main-content">
-          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{acctTitle}</strong></div><div className="topbar-actions"><NeonClock /><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><span>{roleLabel} account</span><button onClick={() => { setShowProfile(false); setAcctView('profile'); }}><UserCircle2 size={14} /> My profile</button><button onClick={() => void signOut()}><LogOut size={14} /> Logout</button></div>}</div></div></header>
+          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{acctTitle}</strong></div><div className="topbar-actions"><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><span>{roleLabel} account</span><button onClick={() => { setShowProfile(false); setAcctView('profile'); }}><UserCircle2 size={14} /> My profile</button><button onClick={() => void signOut()}><LogOut size={14} /> Logout</button></div>}</div></div></header>
           <AccountantPortal onToast={setToast} />
           {toast && <div className="toast"><Check size={17} /> {toast}</div>}
         </main>
@@ -214,7 +214,7 @@ function AppInner() {
       <div className="app-shell">
         <aside className="sidebar">
           <div className="brand"><div className="brand-mark"><img src="/New_LOGO_Final.PNG" alt="SchoolDesk" /></div><span>School<span className="brand-accent">Desk</span></span></div>
-          <div className="school-switcher"><div className="school-avatar">{initials}</div><div><strong>{profile.full_name}</strong><span>{roleLabel} account</span></div></div>
+          <NeonClock />
           <p className="nav-label">{isParent ? 'Parent portal' : 'Student portal'}</p>
           <nav>
             <NavButton item={{ label: 'Dashboard', icon: LayoutDashboard, view: 'dashboard' }} active={view === 'dashboard'} onClick={navigate} />
@@ -223,7 +223,7 @@ function AppInner() {
           <div className="sidebar-footer"><button className="settings-link" onClick={() => void signOut()}><LogOut size={17} /> Sign out</button></div>
         </aside>
         <main className="main-content">
-          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><NeonClock /><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Welcome</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Welcome</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
           {isParent ? <ParentDashboard /> : <StudentDashboard onToast={setToast} />}
           {toast && <div className="toast"><Check size={17} /> {toast}</div>}
           {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={setToast} />}
@@ -239,7 +239,7 @@ function AppInner() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><img src="/New_LOGO_Final.PNG" alt="SchoolDesk" /></div><span>School<span className="brand-accent">Desk</span></span></div>
-        <div className="school-switcher"><div className="school-avatar">{initials}</div><div><strong>{profile.full_name}</strong><span>{roleLabel} account</span></div></div>
+        <NeonClock />
         <p className="nav-label">Workspace</p>
         <nav>{roleNavItems.slice(0, splitPoint).map((item) => <NavButton key={item.view} item={item} active={view === item.view} onClick={navigate} badge={item.view === 'sms' ? waitingAlerts : 0} />)}</nav>
         {!isStaff && <><p className="nav-label nav-label-spaced">Student records</p><nav>{roleNavItems.slice(splitPoint).map((item) => <NavButton key={item.view} item={item} active={view === item.view} onClick={navigate} badge={item.view === 'sms' ? waitingAlerts : 0} />)}</nav></>}
@@ -247,7 +247,7 @@ function AppInner() {
       </aside>
 
       <main className="main-content">
-        <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><NeonClock /><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Signed in</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+        <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Signed in</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
         {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} onAlertsChanged={refreshAlertCount} loading={loading} loadError={dataError} />}
         {toast && <div className="toast"><Check size={17} /> {toast}</div>}
         {credentials && <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />}
