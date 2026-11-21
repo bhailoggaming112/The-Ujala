@@ -102,7 +102,15 @@ export type FeePayment = {
   voided: boolean;
   voided_at: string | null;
   void_reason: string | null;
+  due_fee: number | null;
+  fine_amount: number;
+  concession: number;
+  discount: number;
+  payable_fee: number | null;
+  updated_at: string | null;
+  edit_count: number;
   student_name: string;
+  fathers_name: string | null;
   class_name: string | null;
   section_name: string | null;
   admission_number: string | null;
@@ -275,18 +283,30 @@ export async function saveFeeStructure(values: FeeStructure): Promise<string | n
 }
 
 const PAYMENT_COLUMNS =
-  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, challan_id, challan_number, source, voided, voided_at, void_reason, student:school_students(full_name, class_name, section_name, admission_number)';
+  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, challan_id, challan_number, source, voided, voided_at, void_reason, due_fee, fine_amount, concession, discount, payable_fee, updated_at, edit_count, student:school_students(full_name, fathers_name, class_name, section_name, admission_number)';
 
-type PaymentRow = Omit<FeePayment, 'student_name' | 'class_name' | 'section_name' | 'admission_number'> & {
-  student: { full_name: string; class_name: string | null; section_name: string | null; admission_number: string | null } | null;
+type StudentFacts = { full_name: string; fathers_name: string | null; class_name: string | null; section_name: string | null; admission_number: string | null };
+
+type PaymentRow = Omit<FeePayment, 'student_name' | 'fathers_name' | 'class_name' | 'section_name' | 'admission_number'> & {
+  student: StudentFacts | null;
 };
 
+// Receipts taken before the breakdown existed have no due fee or payable recorded, so
+// the missing numbers fall back to zero rather than showing as blank on a reprint.
 const toPayment = (row: PaymentRow): FeePayment => ({
   ...row,
   voided: row.voided ?? false,
   voided_at: row.voided_at ?? null,
   void_reason: row.void_reason ?? null,
+  due_fee: row.due_fee === null || row.due_fee === undefined ? null : Number(row.due_fee),
+  fine_amount: Number(row.fine_amount ?? 0),
+  concession: Number(row.concession ?? 0),
+  discount: Number(row.discount ?? 0),
+  payable_fee: row.payable_fee === null || row.payable_fee === undefined ? null : Number(row.payable_fee),
+  updated_at: row.updated_at ?? null,
+  edit_count: Number(row.edit_count ?? 0),
   student_name: row.student?.full_name ?? 'Unknown student',
+  fathers_name: row.student?.fathers_name ?? null,
   class_name: row.student?.class_name ?? null,
   section_name: row.student?.section_name ?? null,
   admission_number: row.student?.admission_number ?? null,
@@ -309,16 +329,40 @@ export async function fetchFeePayments(limit = 200): Promise<{ payments: FeePaym
 
 // A payment is recorded by the database so the receipt, the fee history and the
 // student's balance are written together and cannot drift apart.
-export async function recordFeePayment(input: {
+// The money behind one voucher. Due fee, fine, concession and discount are what the
+// counter typed; the database works out the payable total and stores all of it on the
+// receipt, so a reprint shows the same figures as the day it was issued.
+export type FeeVoucherPayload = {
   studentId: string;
-  amount: number | null;
+  amount: number;
   method: PaymentMethod;
   paymentDate: string;
   remarks: string;
   receiptNumber: string;
   challanNumber?: string;
-  source?: 'manual' | 'scan';
-}): Promise<{ receiptNumber: string; balanceAfter: number; challanStatus: string | null; error: string | null }> {
+  dueFee: number;
+  fine: number;
+  concession: number;
+  discount: number;
+};
+
+// Total fee payable is always due + fine − concession − discount, never below zero.
+export const payableFee = (due: number, fine: number, concession: number, discount: number) => Math.max(
+  0,
+  Math.max(0, due) + Math.max(0, fine) - Math.max(0, concession) - Math.max(0, discount),
+);
+
+// The remark the counter starts with. It stays editable, so office staff can reword it.
+export function autoRemarks(payable: number, paid: number, remaining: number): string {
+  if (paid <= 0) return '';
+  if (remaining <= 0 || paid >= payable) return 'Fee Paid in Full';
+  return `Fee Partially Paid (Remaining Amount is Rs. ${Math.round(remaining).toLocaleString()}/-)`;
+}
+
+const rpcError = (error: { code?: string; message?: string } | null, fallback: string) =>
+  (error?.code === 'P0001' && error.message ? error.message : fallback);
+
+export async function recordFeePayment(input: FeeVoucherPayload & { source?: 'manual' | 'scan' }): Promise<{ receiptNumber: string; paymentId: string; balanceAfter: number; challanStatus: string | null; error: string | null }> {
   try {
     const { data, error } = await supabase.rpc('record_fee_payment', {
       p_student_id: input.studentId,
@@ -329,24 +373,63 @@ export async function recordFeePayment(input: {
       p_receipt_number: input.receiptNumber,
       p_challan_number: input.challanNumber ?? null,
       p_source: input.source ?? 'manual',
+      p_due_fee: input.dueFee,
+      p_fine: input.fine,
+      p_concession: input.concession,
+      p_discount: input.discount,
     });
     if (error) {
       // The database raises plain, readable reasons (a duplicate receipt number, for
       // example). Anything else is reported generically.
-      if (error.code === 'P0001' && error.message) {
-        return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: error.message };
-      }
-      return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: 'The payment could not be recorded. Please try again.' };
+      return { receiptNumber: '', paymentId: '', balanceAfter: 0, challanStatus: null, error: rpcError(error, 'The payment could not be recorded. Please try again.') };
     }
-    const row = data as { receipt_number?: string; balance_after?: number; challan_status?: string | null } | null;
+    const row = data as { payment_id?: string; receipt_number?: string; balance_after?: number; challan_status?: string | null } | null;
     return {
       receiptNumber: row?.receipt_number ?? input.receiptNumber,
+      paymentId: row?.payment_id ?? '',
       balanceAfter: Number(row?.balance_after ?? 0),
       challanStatus: row?.challan_status ?? null,
       error: null,
     };
   } catch {
-    return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: 'The payment could not be recorded. Check your connection and try again.' };
+    return { receiptNumber: '', paymentId: '', balanceAfter: 0, challanStatus: null, error: 'The payment could not be recorded. Check your connection and try again.' };
+  }
+}
+
+// Corrects a voucher that was keyed wrongly. The receipt keeps its number, the account
+// moves by the difference between the old and new amount, and a ledger entry records it.
+export async function updateFeeVoucher(paymentId: string, input: Omit<FeeVoucherPayload, 'studentId' | 'challanNumber'>): Promise<{ balanceAfter: number; error: string | null }> {
+  try {
+    const { data, error } = await supabase.rpc('set_payment_voucher', {
+      p_payment_id: paymentId,
+      p_amount: input.amount,
+      p_method: input.method,
+      p_payment_date: input.paymentDate,
+      p_remarks: input.remarks,
+      p_due_fee: input.dueFee,
+      p_fine: input.fine,
+      p_concession: input.concession,
+      p_discount: input.discount,
+    });
+    if (error) return { balanceAfter: 0, error: rpcError(error, 'That voucher could not be updated. Please try again.') };
+    const row = data as { balance_after?: number } | null;
+    return { balanceAfter: Number(row?.balance_after ?? 0), error: null };
+  } catch {
+    return { balanceAfter: 0, error: 'That voucher could not be updated. Check your connection and try again.' };
+  }
+}
+
+// Removes a voucher that should never have been recorded. A reason is required, the
+// student's dues go back to what they were, and the ledger keeps a reversal entry so the
+// deletion is never silent.
+export async function deleteFeeVoucher(paymentId: string, reason: string): Promise<{ restored: number; balanceAfter: number; error: string | null }> {
+  try {
+    const { data, error } = await supabase.rpc('delete_payment_voucher', { p_payment_id: paymentId, p_reason: reason });
+    if (error) return { restored: 0, balanceAfter: 0, error: rpcError(error, 'That voucher could not be deleted. Please try again.') };
+    const row = data as { restored?: number; balance_after?: number } | null;
+    return { restored: Number(row?.restored ?? 0), balanceAfter: Number(row?.balance_after ?? 0), error: null };
+  } catch {
+    return { restored: 0, balanceAfter: 0, error: 'That voucher could not be deleted. Check your connection and try again.' };
   }
 }
 
@@ -358,8 +441,7 @@ export async function voidFeePayment(paymentId: string, reason: string): Promise
   try {
     const { data, error } = await supabase.rpc('void_fee_payment', { p_payment_id: paymentId, p_reason: reason });
     if (error) {
-      if (error.code === 'P0001' && error.message) return { restored: 0, notRestored: 0, balanceAfter: 0, error: error.message };
-      return { restored: 0, notRestored: 0, balanceAfter: 0, error: 'The payment could not be reversed. Please try again.' };
+      return { restored: 0, notRestored: 0, balanceAfter: 0, error: rpcError(error, 'The payment could not be reversed. Please try again.') };
     }
     const row = data as { restored?: number; not_restored?: number; balance_after?: number } | null;
     return {
@@ -503,6 +585,23 @@ export function collectedOn(payments: FeePayment[], day: string): number {
 export function collectedInMonth(payments: FeePayment[], month: string): number {
   return payments
     .filter((payment) => (payment.payment_date ?? '').slice(0, 7) === month && !payment.voided)
+    .reduce((total, payment) => total + Number(payment.amount), 0);
+}
+
+// Every receipt issued in one fee month, newest first. This is what the submitted
+// vouchers list shows, and what its collected total is added up from.
+export function paymentsInMonth(payments: FeePayment[], month: string): FeePayment[] {
+  return payments
+    .filter((payment) => (payment.payment_date ?? '').slice(0, 7) === month)
+    .sort((a, b) => (b.payment_date ?? '').localeCompare(a.payment_date ?? '')
+      || (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+}
+
+// The money actually collected on a list of receipts. A reversed receipt is money the
+// school no longer holds, so it never counts towards a total.
+export function totalCollected(payments: FeePayment[]): number {
+  return payments
+    .filter((payment) => !payment.voided)
     .reduce((total, payment) => total + Number(payment.amount), 0);
 }
 

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
-  BellRing, Coins, FileSpreadsheet, Printer, RefreshCw, Send, Wallet,
+  BellRing, Coins, FileSpreadsheet, RefreshCw, ScanLine, Send, Wallet, X,
 } from 'lucide-react';
+import { DeleteVoucherModal } from '@/components/DeleteVoucherModal';
 import { FeeReceiptView } from '@/components/FeeDocuments';
-import { FeeScanPanel } from '@/components/FeeScanPanel';
+import { FeeVoucherList } from '@/components/FeeVoucherList';
 import { ChallanTab, ReportsTab, StructureTab } from '@/components/FeeSetupTabs';
 import { fetchAbsenteeSendMode } from '@/lib/absenteeAlerts';
 import { todayKey } from '@/lib/attendance';
@@ -12,9 +13,9 @@ import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
 import type { Student } from '@/lib/schoolTypes';
 import { useAuth } from '@/lib/auth';
 import {
-  EMPTY_PAYMENT_SETTINGS, PAYMENT_METHODS, buildFeeSummary, collectedInMonth, collectedOn, fetchChallans,
-  fetchFeePayments, fetchFeeStructures, fetchPaymentSettings, formatDay, formatMoney, monthKey, monthLabel,
-  monthOptions, recordFeePayment,
+  EMPTY_PAYMENT_SETTINGS, PAYMENT_METHODS, autoRemarks, collectedInMonth, collectedOn, fetchChallans,
+  fetchFeePayments, fetchFeeStructures, fetchPaymentSettings, formatDay, formatMoney, lookupFeeChallan, monthKey,
+  monthLabel, monthOptions, payableFee, recordFeePayment, updateFeeVoucher,
   type FeeChallan, type FeePayment, type FeeStructure, type PaymentMethod, type PaymentSettings,
 } from '@/lib/fees';
 import { pickWhatsAppContact, whatsappNumberWarning } from '@/lib/whatsapp';
@@ -111,11 +112,9 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
 
   const activeStudents = useMemo(() => students.filter((student) => student.status === 'active'), [students]);
   const classList = useMemo(() => Array.from(new Set(activeStudents.map((student) => student.class_name))).sort(), [activeStudents]);
-  const sectionList = useMemo(() => Array.from(new Set(activeStudents.map((student) => student.section_name))).sort(), [activeStudents]);
   const sectionsFor = (className: string) => Array.from(new Set(
     activeStudents.filter((student) => !className || student.class_name === className).map((student) => student.section_name),
   )).sort();
-  const structureFor = (student: Student) => structures.find((row) => row.class_name === student.class_name);
 
   const pendingDues = activeStudents.reduce((total, student) => total + Math.max(0, Number(student.fee_balance ?? 0)), 0);
   const defaulterCount = activeStudents.filter((student) => Number(student.fee_balance ?? 0) > 0).length;
@@ -197,11 +196,6 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
       {tab === 'collection' && (
         <CollectionTab
           students={activeStudents}
-          classList={classList}
-          sectionList={sectionList}
-          sectionsFor={sectionsFor}
-          structureFor={structureFor}
-          challans={challans}
           payments={payments}
           loading={loading}
           today={today}
@@ -313,253 +307,378 @@ function OverviewTab({ loading, collectedToday, monthlyCollection, pendingDues, 
   );
 }
 
-function CollectionTab({ students, classList, sectionList, sectionsFor, structureFor, challans, payments, loading, today, onToast, onSaved }: {
+type VoucherForm = {
+  dueFee: string;
+  fine: string;
+  concession: string;
+  discount: string;
+  amount: string;
+  method: PaymentMethod;
+  paymentDate: string;
+  receiptNumber: string;
+  remarks: string;
+};
+
+const emptyVoucher = (today: string): VoucherForm => ({
+  dueFee: '', fine: '', concession: '', discount: '', amount: '',
+  method: 'cash', paymentDate: today, receiptNumber: '', remarks: '',
+});
+
+const toNumber = (value: string) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+// The counter screen. One code gets the student on screen with their due fee already
+// filled in; the calculation updates as the counter types; and every voucher submitted in
+// the month is listed underneath to correct, delete or reprint.
+function CollectionTab({ students, payments, loading, today, onToast, onSaved }: {
   students: Student[];
-  classList: string[];
-  sectionList: string[];
-  sectionsFor: (className: string) => string[];
-  structureFor: (student: Student) => FeeStructure | undefined;
-  challans: FeeChallan[];
   payments: FeePayment[];
   loading: boolean;
   today: string;
   onToast: (message: string) => void;
   onSaved: () => Promise<void>;
 }) {
-  const [search, setSearch] = useState('');
-  const [classFilter, setClassFilter] = useState('');
-  const [sectionFilter, setSectionFilter] = useState('');
+  const [code, setCode] = useState('');
   const [studentId, setStudentId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [paymentDate, setPaymentDate] = useState(today);
-  const [receiptNumber, setReceiptNumber] = useState('');
-  const [remarks, setRemarks] = useState('');
-  const [error, setError] = useState('');
+  const [challanNumber, setChallanNumber] = useState('');
+  const [form, setForm] = useState<VoucherForm>(() => emptyVoucher(today));
+  const [remarksTouched, setRemarksTouched] = useState(false);
+  const [editingId, setEditingId] = useState('');
+  const [looking, setLooking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<FeePayment | null>(null);
-  const [receiptSummary, setReceiptSummary] = useState<ReturnType<typeof buildFeeSummary> | null>(null);
-  const [historyFor, setHistoryFor] = useState<FeePayment | null>(null);
+  const [reprinting, setReprinting] = useState<FeePayment | null>(null);
+  const [deleting, setDeleting] = useState<FeePayment | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const matches = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return students.filter((student) => {
-      if (classFilter && student.class_name !== classFilter) return false;
-      if (sectionFilter && student.section_name !== sectionFilter) return false;
-      if (!needle) return true;
-      return [student.full_name, student.admission_number, student.roll_number, student.guardian_name]
-        .some((value) => (value ?? '').toLowerCase().includes(needle));
-    });
-  }, [students, search, classFilter, sectionFilter]);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const focusLookup = () => window.setTimeout(() => inputRef.current?.focus(), 0);
 
   const student = students.find((row) => row.id === studentId) ?? null;
-  const month = monthKey();
-  const paidThisMonth = student
-    ? payments.filter((payment) => payment.student_id === student.id && (payment.payment_date ?? '').slice(0, 7) === month)
-      .reduce((total, payment) => total + Number(payment.amount), 0)
-    : 0;
-  const summary = student
-    ? buildFeeSummary(student, structureFor(student), challans.find((row) => row.student_id === student.id), paidThisMonth, today)
-    : null;
-  const remaining = student ? Math.max(0, Number(student.fee_balance ?? 0)) : 0;
+
+  const dueFee = toNumber(form.dueFee);
+  const fine = toNumber(form.fine);
+  const concession = toNumber(form.concession);
+  const discount = toNumber(form.discount);
+  const paid = toNumber(form.amount);
+  const payable = payableFee(dueFee, fine, concession, discount);
+  const remaining = Math.max(0, payable - paid);
+
+  // The remark follows the figures until the counter edits it, after which their wording
+  // is kept as typed.
+  useEffect(() => {
+    if (remarksTouched) return;
+    setForm((current) => ({ ...current, remarks: autoRemarks(payable, paid, remaining) }));
+  }, [payable, paid, remaining, remarksTouched]);
+
+  const set = (patch: Partial<VoucherForm>) => setForm((current) => ({ ...current, ...patch }));
+
+  const loadStudent = (row: Student, due: number, challan: string) => {
+    setStudentId(row.id);
+    setChallanNumber(challan);
+    setCode(row.admission_number);
+    setForm({ ...emptyVoucher(today), dueFee: due > 0 ? String(Math.round(due)) : '' });
+    setRemarksTouched(false);
+    setEditingId('');
+    setError('');
+    focusLookup();
+  };
+
+  // An admission number finds the student straight away; anything else is handed to the
+  // database, which understands challan numbers and scanned codes too.
+  const lookup = async (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = code.trim();
+    if (!trimmed) { setError('Enter or scan an admission number or challan number first.'); return; }
+
+    setLooking(true);
+    setError('');
+
+    const byAdmission = students.find((row) => (row.admission_number ?? '').toLowerCase() === trimmed.toLowerCase());
+    if (byAdmission) {
+      setLooking(false);
+      loadStudent(byAdmission, Math.max(0, Number(byAdmission.fee_balance ?? 0)), '');
+      return;
+    }
+
+    const result = await lookupFeeChallan(trimmed);
+    setLooking(false);
+    if (result.error || !result.challan) {
+      setStudentId('');
+      setError(result.error ?? 'No student or challan matches that code.');
+      return;
+    }
+
+    const found = students.find((row) => row.id === result.challan?.student_id);
+    if (!found) {
+      setError('That challan belongs to a student who is not on the active roll.');
+      return;
+    }
+    loadStudent(found, result.challan.remaining, result.challan.challan_number ?? '');
+  };
+
+  const startEdit = (payment: FeePayment) => {
+    const row = students.find((item) => item.id === payment.student_id) ?? null;
+    if (row) setStudentId(row.id);
+    setCode(row?.admission_number ?? payment.admission_number ?? '');
+    setChallanNumber(payment.challan_number ?? '');
+    setEditingId(payment.id);
+    setRemarksTouched(true);
+    setError('');
+    setForm({
+      dueFee: payment.due_fee === null ? '' : String(Math.round(payment.due_fee)),
+      fine: payment.fine_amount > 0 ? String(Math.round(payment.fine_amount)) : '',
+      concession: payment.concession > 0 ? String(Math.round(payment.concession)) : '',
+      discount: payment.discount > 0 ? String(Math.round(payment.discount)) : '',
+      amount: String(Math.round(payment.amount)),
+      method: payment.method,
+      paymentDate: payment.payment_date,
+      receiptNumber: payment.receipt_number,
+      remarks: payment.remarks ?? '',
+    });
+    window.setTimeout(() => document.getElementById('fee-voucher-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  };
+
+  const cancelEdit = () => {
+    setEditingId('');
+    setChallanNumber('');
+    setForm(emptyVoucher(today));
+    setRemarksTouched(false);
+    setError('');
+    focusLookup();
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!student) { setError('Choose a student first.'); return; }
-    const parsed = Number(amount);
-    if (!Number.isFinite(parsed) || parsed <= 0) { setError('Enter an amount greater than zero.'); return; }
-    if (paymentDate > today) { setError('The payment date cannot be in the future.'); return; }
+    if (!student) { setError('Look up a student first.'); return; }
+    if (paid <= 0) { setError('Enter the amount received.'); return; }
+    if (paid > 1000000) { setError('That amount is larger than this form accepts.'); return; }
+    if (form.paymentDate > today) { setError('The payment date cannot be in the future.'); return; }
+
     setSaving(true);
     setError('');
+
+    if (editingId) {
+      const result = await updateFeeVoucher(editingId, {
+        amount: paid,
+        method: form.method,
+        paymentDate: form.paymentDate,
+        remarks: form.remarks.trim(),
+        receiptNumber: form.receiptNumber,
+        dueFee,
+        fine,
+        concession,
+        discount,
+      });
+      setSaving(false);
+      if (result.error) { setError(result.error); return; }
+      onToast(`Voucher ${form.receiptNumber} updated for ${student.full_name}.`);
+      cancelEdit();
+      await onSaved();
+      return;
+    }
+
     const result = await recordFeePayment({
       studentId: student.id,
-      amount: parsed,
-      method,
-      paymentDate,
-      remarks: remarks.trim(),
-      receiptNumber: receiptNumber.trim(),
+      amount: paid,
+      method: form.method,
+      paymentDate: form.paymentDate,
+      remarks: form.remarks.trim(),
+      receiptNumber: form.receiptNumber.trim(),
+      challanNumber: challanNumber || undefined,
+      dueFee,
+      fine,
+      concession,
+      discount,
     });
     setSaving(false);
     if (result.error) { setError(result.error); return; }
-    const saved: FeePayment = {
-      id: `local-${result.receiptNumber}`,
+
+    setReceipt({
+      id: result.paymentId || `local-${result.receiptNumber}`,
       student_id: student.id,
       receipt_number: result.receiptNumber,
-      amount: parsed,
-      method,
-      payment_date: paymentDate,
-      remarks: remarks.trim() || null,
+      amount: paid,
+      method: form.method,
+      payment_date: form.paymentDate,
+      remarks: form.remarks.trim() || null,
       balance_after: result.balanceAfter,
       created_at: new Date().toISOString(),
       challan_id: null,
-      challan_number: null,
+      challan_number: challanNumber || null,
       source: 'manual',
       voided: false,
       voided_at: null,
       void_reason: null,
+      due_fee: dueFee,
+      fine_amount: fine,
+      concession,
+      discount,
+      payable_fee: payable,
+      updated_at: null,
+      edit_count: 0,
       student_name: student.full_name,
+      fathers_name: student.fathers_name ?? null,
       class_name: student.class_name,
       section_name: student.section_name,
       admission_number: student.admission_number,
-    };
-    setReceiptSummary(summary);
-    setReceipt(saved);
-    setAmount('');
-    setReceiptNumber('');
-    setRemarks('');
+    });
     onToast(`Receipt ${result.receiptNumber} saved for ${student.full_name}.`);
+    cancelEdit();
     await onSaved();
   };
 
-  const studentHistory = student
-    ? payments.filter((payment) => payment.student_id === student.id).slice(0, 12)
-    : payments.slice(0, 12);
+  const studentChallan = challanNumber
+    ? payments.find((payment) => payment.student_id === studentId && payment.challan_number === challanNumber)
+    : undefined;
 
   return (
     <div className="fee-section">
-      <FeeScanPanel today={today} onToast={onToast} onPaid={onSaved} />
-
-      <section className="fee-card">
+      <section className="fee-card fee-counter">
         <div className="fee-card-head">
-          <div><span className="eyebrow">Step 1</span><h2>Find the student</h2></div>
-          <span className="fee-hint">{matches.length} students match</span>
-        </div>
-        <div className="fee-filters">
-          <label className="control-field"><span>Search</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, admission or GR no., roll no." />
-          </label>
-          <label className="control-field"><span>Class</span>
-            <select value={classFilter} onChange={(event) => { setClassFilter(event.target.value); setSectionFilter(''); }}>
-              <option value="">All classes</option>
-              {classList.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </label>
-          <label className="control-field"><span>Section</span>
-            <select value={sectionFilter} onChange={(event) => setSectionFilter(event.target.value)}>
-              <option value="">All sections</option>
-              {(classFilter ? sectionsFor(classFilter) : sectionList).map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="fee-picker">
-          {loading && <p className="fee-empty">Loading students…</p>}
-          {!loading && matches.length === 0 && <p className="fee-empty">No student matches these filters.</p>}
-          {!loading && matches.slice(0, 40).map((row) => (
-            <button
-              key={row.id}
-              type="button"
-              className={`fee-pick ${studentId === row.id ? 'on' : ''}`}
-              onClick={() => { setStudentId(row.id); setError(''); }}
-            >
-              <strong>{row.full_name}</strong>
-              <span>{row.class_name} · Section {row.section_name} · {row.admission_number}</span>
-              <em className={Number(row.fee_balance ?? 0) > 0 ? 'due' : 'clear'}>
-                {Number(row.fee_balance ?? 0) > 0 ? formatMoney(Number(row.fee_balance ?? 0)) : 'Cleared'}
-              </em>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {student && summary && (
-        <div className="fee-collect-grid">
-          <section className="fee-card">
-            <div className="fee-card-head">
-              <div><span className="eyebrow">Step 2</span><h2>{student.full_name}</h2><p className="fee-sub">{student.class_name} · Section {student.section_name} · {student.admission_number}</p></div>
-            </div>
-            <dl className="fee-summary">
-              <div><dt>Previous arrears</dt><dd>{formatMoney(summary.previousArrears)}</dd></div>
-              <div><dt>Current monthly fee</dt><dd>{formatMoney(summary.currentMonthlyFee)}</dd></div>
-              <div><dt>Concession</dt><dd className="credit">−{formatMoney(summary.concession)}</dd></div>
-              <div><dt>Fine</dt><dd>{formatMoney(summary.fine)}</dd></div>
-              <div className="strong"><dt>Total payable</dt><dd>{formatMoney(summary.totalPayable)}</dd></div>
-              <div><dt>Paid this month</dt><dd className="credit">{formatMoney(summary.paid)}</dd></div>
-              <div className="strong"><dt>Remaining balance</dt><dd>{formatMoney(remaining)}</dd></div>
-            </dl>
-          </section>
-
-          <section className="fee-card">
-            <div className="fee-card-head">
-              <div><span className="eyebrow">Step 3</span><h2>Record the payment</h2></div>
-            </div>
-            <form className="fee-form" onSubmit={submit}>
-              <label className="control-field"><span>Amount received (Rs)</span>
-                <input type="number" min="1" step="1" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={remaining > 0 ? String(Math.round(remaining)) : 'e.g. 2500'} required />
-              </label>
-              <div className="fee-filters">
-                <label className="control-field"><span>Payment date</span>
-                  <input type="date" max={today} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required />
-                </label>
-                <label className="control-field"><span>Payment method</span>
-                  <select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
-                    {PAYMENT_METHODS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
-                  </select>
-                </label>
-                <label className="control-field"><span>Receipt no. (leave blank to generate)</span>
-                  <input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} placeholder="Auto" maxLength={40} />
-                </label>
-                <label className="control-field full"><span>Remarks</span>
-                  <input value={remarks} onChange={(event) => setRemarks(event.target.value)} placeholder="Optional note for the receipt" />
-                </label>
-              </div>
-              <div className="fee-form-actions">
-                {remaining > 0 && (
-                  <button type="button" className="secondary-button" onClick={() => setAmount(String(Math.round(remaining)))}>Full payment</button>
-                )}
-                <button type="button" className="secondary-button" onClick={() => setAmount(String(Math.round(remaining / 2)))} disabled={remaining <= 0}>Half</button>
-                <button type="submit" className="primary-button" disabled={saving}><Coins size={16} /> {saving ? 'Saving…' : 'Save payment'}</button>
-              </div>
-              {error && <p className="fee-error">{error}</p>}
-            </form>
-          </section>
-        </div>
-      )}
-
-      <section className="fee-card">
-        <div className="fee-card-head">
-          <div><span className="eyebrow">History</span><h2>{student ? `Fee transactions · ${student.full_name}` : 'Recent fee transactions'}</h2></div>
-        </div>
-        {studentHistory.length === 0 ? (
-          <p className="fee-empty">No payments recorded for this student yet.</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Receipt</th><th>Student</th><th>Date</th><th>Method</th><th className="text-right">Amount</th><th className="text-right">Balance after</th><th className="no-print" /></tr></thead>
-              <tbody>
-                {studentHistory.map((payment) => (
-                  <tr key={payment.id}>
-                    <td className="fee-mono">{payment.receipt_number}</td>
-                    <td><strong>{payment.student_name}</strong></td>
-                    <td>{formatDay(payment.payment_date)}</td>
-                    <td className="capitalize">{payment.method}</td>
-                    <td className="text-right font-semibold tabular-nums">{formatMoney(payment.amount)}</td>
-                    <td className="text-right tabular-nums">{formatMoney(payment.balance_after)}</td>
-                    <td className="text-right no-print">
-                      <button type="button" className="fee-link" onClick={() => setHistoryFor(payment)}><Printer size={14} /> {payment.challan_number ? 'Receipt · challan' : 'Receipt'}</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            <span className="eyebrow">Step 1 · Quick lookup</span>
+            <h2>Admission no. or challan no.</h2>
+            <p className="fee-sub">Type it or scan the barcode and press Enter. The student, their class and their due fee fill in on their own.</p>
           </div>
+          <span className="fee-hint">Barcode reader ready</span>
+        </div>
+
+        <form className="fee-scan-bar" onSubmit={lookup}>
+          <div className="fee-scan-field">
+            <ScanLine size={18} />
+            <input
+              ref={inputRef}
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="Admission no. / challan no., then Enter"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Admission number or challan number"
+            />
+          </div>
+          <button type="submit" className="primary-button" disabled={looking}>{looking ? 'Looking up…' : 'Load student'}</button>
+          {student && <button type="button" className="secondary-button" onClick={() => { setStudentId(''); setChallanNumber(''); setCode(''); setForm(emptyVoucher(today)); setRemarksTouched(false); setEditingId(''); focusLookup(); }}><X size={16} /> Clear</button>}
+        </form>
+
+        {error && <p className="fee-error">{error}</p>}
+
+        {student ? (
+          <div className="fee-identity">
+            <div><span>Student Name</span><strong>{student.full_name}</strong></div>
+            <div><span>Father Name</span><strong>{student.fathers_name || student.guardian_name || '—'}</strong></div>
+            <div><span>Class / Section</span><strong>{student.class_name} / {student.section_name}</strong></div>
+            <div><span>Due Fee</span><strong className={Number(student.fee_balance ?? 0) > 0 ? 'due' : 'clear'}>{formatMoney(Math.max(0, Number(student.fee_balance ?? 0)))}</strong></div>
+          </div>
+        ) : (
+          !loading && <p className="fee-empty">No student loaded yet. Enter an admission number to begin.</p>
         )}
       </section>
 
-      {receipt && (
+      {student && (
+        <section className="fee-card" id="fee-voucher-form">
+          <div className="fee-card-head">
+            <div>
+              <span className="eyebrow">Step 2 · Fee voucher</span>
+              <h2>{editingId ? 'Update this voucher' : 'Calculate and collect'}</h2>
+              {editingId && <p className="fee-sub">Receipt {form.receiptNumber} keeps its number; only the figures below change.</p>}
+            </div>
+            {editingId && <button type="button" className="secondary-button" onClick={cancelEdit}>Cancel edit</button>}
+          </div>
+
+          <form className="fee-form" onSubmit={submit}>
+            <div className="fee-voucher-grid">
+              <label className="control-field"><span>Due Fee (Rs)</span>
+                <input type="number" min="0" step="1" inputMode="decimal" value={form.dueFee} onChange={(event) => set({ dueFee: event.target.value })} placeholder="0" />
+              </label>
+              <label className="control-field"><span>Late Fee Fine (Rs)</span>
+                <input type="number" min="0" step="1" inputMode="decimal" value={form.fine} onChange={(event) => set({ fine: event.target.value })} placeholder="0" />
+              </label>
+              <label className="control-field"><span>Fee Concession (Rs)</span>
+                <input type="number" min="0" step="1" inputMode="decimal" value={form.concession} onChange={(event) => set({ concession: event.target.value })} placeholder="0" />
+              </label>
+              <label className="control-field"><span>Discount (Rs)</span>
+                <input type="number" min="0" step="1" inputMode="decimal" value={form.discount} onChange={(event) => set({ discount: event.target.value })} placeholder="0" />
+              </label>
+              <label className="control-field"><span>Payable Fee (Rs)</span>
+                <input value={Math.round(payable).toLocaleString()} readOnly className="fee-readonly" aria-label="Payable fee, worked out from due fee, fine, concession and discount" />
+              </label>
+              <label className="control-field"><span>Paid Fee (Rs)</span>
+                <input type="number" min="0" step="1" inputMode="decimal" value={form.amount} onChange={(event) => set({ amount: event.target.value })} placeholder="Amount received" required />
+              </label>
+              <label className="control-field"><span>Remaining (Rs)</span>
+                <input value={Math.round(remaining).toLocaleString()} readOnly className="fee-readonly" aria-label="Remaining balance" />
+              </label>
+              <label className="control-field"><span>Payment method</span>
+                <select value={form.method} onChange={(event) => set({ method: event.target.value as PaymentMethod })}>
+                  {PAYMENT_METHODS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+                </select>
+              </label>
+              <label className="control-field"><span>Payment date</span>
+                <input type="date" max={today} value={form.paymentDate} onChange={(event) => set({ paymentDate: event.target.value })} required />
+              </label>
+              <label className="control-field"><span>Receipt no.</span>
+                <input value={form.receiptNumber} onChange={(event) => set({ receiptNumber: event.target.value })} placeholder="Blank generates one" maxLength={40} readOnly={Boolean(editingId)} />
+              </label>
+              <label className="control-field full"><span>Remarks</span>
+                <input
+                  value={form.remarks}
+                  onChange={(event) => { setRemarksTouched(true); set({ remarks: event.target.value }); }}
+                  placeholder="Filled in automatically, edit it if you need to"
+                />
+              </label>
+            </div>
+
+            <div className="fee-form-actions">
+              {payable > 0 && <button type="button" className="secondary-button" onClick={() => set({ amount: String(Math.round(payable)) })}>Pay full {formatMoney(payable)}</button>}
+              {remaining > 0 && <button type="button" className="secondary-button" onClick={() => set({ amount: String(Math.round(payable / 2)) })}>Half</button>}
+              {remarksTouched && <button type="button" className="secondary-button" onClick={() => setRemarksTouched(false)}>Reset remarks</button>}
+              <button type="submit" className="primary-button" disabled={saving}>
+                <Coins size={16} /> {saving ? 'Saving…' : editingId ? 'Update voucher' : 'Save voucher & print'}
+              </button>
+            </div>
+
+            <div className="fee-tally">
+              <span>Total fee payable <strong>{formatMoney(payable)}</strong></span>
+              <span>Fee paid <strong>{formatMoney(paid)}</strong></span>
+              <span>Balance <strong className={remaining > 0 ? 'due' : 'clear'}>{formatMoney(remaining)}</strong></span>
+              {studentChallan?.challan_number && <span>Challan <strong>{studentChallan.challan_number}</strong></span>}
+            </div>
+          </form>
+        </section>
+      )}
+
+      <FeeVoucherList
+        payments={payments}
+        loading={loading}
+        onEdit={startEdit}
+        onDelete={setDeleting}
+        onPrint={setReprinting}
+      />
+
+      {receipt && <FeeReceiptView payment={receipt} student={student} summary={null} onClose={() => setReceipt(null)} />}
+      {reprinting && (
         <FeeReceiptView
-          payment={receipt}
-          student={student}
-          summary={receiptSummary}
-          onClose={() => setReceipt(null)}
+          payment={reprinting}
+          student={students.find((row) => row.id === reprinting.student_id) ?? null}
+          summary={null}
+          onClose={() => setReprinting(null)}
         />
       )}
-      {historyFor && (
-        <FeeReceiptView
-          payment={historyFor}
-          student={students.find((row) => row.id === historyFor.student_id) ?? null}
-          summary={null}
-          onClose={() => setHistoryFor(null)}
+      {deleting && (
+        <DeleteVoucherModal
+          payment={deleting}
+          onClose={() => setDeleting(null)}
+          onDone={async (message) => { setDeleting(null); onToast(message); await onSaved(); }}
         />
+      )}
+
+      {!student && !loading && (
+        <p className="fee-hint"><Wallet size={14} /> Load a student above to see their due fee and collect the payment.</p>
       )}
     </div>
   );

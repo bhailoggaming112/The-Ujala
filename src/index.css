@@ -1869,6 +1869,112 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .accountant-page .module-heading, .fee-tabs, .fee-quick, .fee-alert { display: none !important; }
 }
 
+/* ---- Fee counter: lookup, live calculation and the Acknowledgment receipt ----- */
+
+.fee-counter { border-color: #cfe8ef; background: linear-gradient(180deg, #f8fdfe, #ffffff 60%); }
+.fee-counter .fee-scan-bar { margin-top: 4px; }
+
+/* What the lookup found, laid out as the four facts the counter needs. */
+.fee-identity { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed #dbe9ee; }
+.fee-identity > div { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; background: #ffffff; border: 1px solid #e6eff3; }
+.fee-identity span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .9px; color: #93a5af; font-weight: 700; }
+.fee-identity strong { font: 700 14px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; letter-spacing: -.2px; }
+.fee-identity strong.due { color: #b0483a; }
+.fee-identity strong.clear { color: #2f7d57; }
+
+.fee-voucher-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.fee-panel .control-field input.fee-readonly,
+.fee-readonly {
+  border: 1px solid #d5e6ec !important;
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: #f1f8fb !important;
+  color: #226d86;
+  font: 700 13px 'DM Sans', sans-serif;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.fee-tally { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 4px; padding: 14px 16px; border-radius: 13px; background: linear-gradient(120deg, #eef8fa, #f7fcfd); }
+.fee-tally span { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: #617984; }
+.fee-tally strong { font: 800 15px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #226d86; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+.fee-tally strong.due { color: #b0483a; }
+.fee-tally strong.clear { color: #2f7d57; }
+
+.fee-filter-reset { display: flex; align-items: flex-end; }
+
+/* The money collected across the listed vouchers, pinned to the bottom of the table. */
+.fee-total-row td { background: #f6fbfc; font-weight: 700; color: #2e4759; border-top: 2px solid #d9e9ee; font-size: 12.5px; }
+.fee-total-row td:first-child { padding-left: 18px; }
+.fee-total-row.muted td { background: #fbfcfd; color: #8598a4; font-weight: 600; border-top: 1px dashed #e3ebee; }
+
+/* Acknowledgment receipt ------------------------------------------------------- */
+.ack-modal { width: min(760px, 96vw); }
+.ack-layout-picker { display: inline-flex; gap: 4px; margin: 16px 0 12px; padding: 4px; border-radius: 11px; background: #f2f7f9; border: 1px solid #e6eef1; }
+.ack-layout-tab { border: 0; border-radius: 8px; padding: 8px 16px; background: transparent; color: #6d8491; font: 700 11.5px 'Plus Jakarta Sans', 'DM Sans', sans-serif; cursor: pointer; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
+.ack-layout-tab:hover { background: #e8f2f5; color: #2f6d86; }
+.ack-layout-tab.on { background: #ffffff; color: #22718c; box-shadow: 0 3px 10px #4a90a51f; }
+
+.ack-paper { margin: 0 auto; padding: 22px 24px 18px; background: #ffffff; border: 1px solid #dbe6ea; border-radius: 12px; box-shadow: 0 10px 26px #23495a14; color: #1d3c4d; }
+.ack-paper.thermal { width: 302px; padding: 14px 14px 12px; font-size: 11px; }
+
+.ack-head { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid #2e4759; }
+.ack-head img { width: 46px; height: 46px; object-fit: contain; }
+.ack-head h2 { margin: 0; font: 800 17px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #1d3c4d; letter-spacing: -.4px; }
+.ack-head span { font-size: 10px; text-transform: uppercase; letter-spacing: 1.6px; color: #2f6d86; font-weight: 700; }
+.ack-paper.thermal .ack-head { gap: 8px; }
+.ack-paper.thermal .ack-head img { width: 34px; height: 34px; }
+.ack-paper.thermal .ack-head h2 { font-size: 13px; }
+.ack-paper.thermal .ack-head span { font-size: 8px; letter-spacing: 1.2px; }
+
+.ack-identity { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; padding: 12px 0; border-bottom: 1px dashed #dde8ec; }
+.ack-identity > div { display: flex; justify-content: space-between; gap: 10px; font-size: 11.5px; }
+.ack-identity span { color: #7b8f9b; }
+.ack-identity strong { color: #2e4759; font-weight: 700; text-align: right; }
+.ack-paper.thermal .ack-identity { grid-template-columns: 1fr; gap: 3px; padding: 8px 0; }
+.ack-paper.thermal .ack-identity > div { font-size: 10.5px; }
+
+.ack-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+.ack-table th { text-align: left; font-weight: 600; color: #617984; padding: 7px 0; border-bottom: 1px solid #eef3f5; font-size: 12px; }
+.ack-table td { text-align: right; padding: 7px 0; border-bottom: 1px solid #eef3f5; font-weight: 700; color: #2e4759; font-variant-numeric: tabular-nums; font-size: 12px; }
+.ack-table tr.ack-strong th, .ack-table tr.ack-strong td { background: #f5fafc; font-weight: 800; color: #1d3c4d; padding-left: 10px; padding-right: 10px; }
+.ack-table tr.ack-credit td { color: #2f7d57; }
+.ack-paper.thermal .ack-table th, .ack-paper.thermal .ack-table td { font-size: 10.5px; padding: 4px 0; }
+
+.ack-remarks { padding: 10px 12px; border-radius: 10px; background: #f7fbfc; border: 1px solid #e6eff3; }
+.ack-remarks span { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: 1.1px; color: #93a5af; font-weight: 700; margin-bottom: 3px; }
+.ack-remarks p { margin: 0; font-size: 12px; color: #3f5767; }
+
+.ack-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-top: 16px; }
+.ack-meta { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: #7b8f9b; }
+.ack-meta strong { color: #2e4759; }
+.ack-sign { flex: 0 0 150px; border-top: 1px solid #b9c9d2; padding-top: 6px; text-align: center; font-size: 10.5px; color: #617984; font-weight: 700; }
+.ack-paper.thermal .ack-foot { flex-direction: column; align-items: stretch; gap: 10px; }
+
+@media (max-width: 720px) {
+  .ack-identity { grid-template-columns: 1fr; }
+  .ack-foot { flex-direction: column; align-items: stretch; }
+  .ack-sign { flex: 1 1 auto; }
+  .fee-identity { grid-template-columns: 1fr; }
+}
+
+/* The printed Acknowledgment receipt. The sheet carries the layout class the counter
+   picked: A5 uses the standard A4 portrait page, an 80mm roll narrows the page itself. */
+.print-fee-receipt .print-remarks { margin-top: 12px; border: 1px solid #c3d0d8; border-radius: 6px; padding: 8px 10px; break-inside: avoid; }
+.print-fee-receipt .print-remarks > span { display: block; font-size: 8px; text-transform: uppercase; letter-spacing: 1.1px; color: #5a6b76; font-weight: 700; margin-bottom: 3px; }
+.print-fee-receipt .print-remarks p { margin: 0; font-size: 10px; color: #132a3a; }
+.print-fee-receipt .print-timestamp { margin: 10px 0 0; padding-top: 6px; border-top: 1px dashed #c3d0d8; font-size: 8.5px; color: #5a6b76; text-align: right; }
+
+@media print {
+  .print-fee-receipt.ack-roll { font-size: 10px; }
+  .print-fee-receipt.ack-roll .print-header { border-bottom-width: 1.5px; gap: 6px; padding-bottom: 5px; margin-bottom: 6px; }
+  .print-fee-receipt.ack-roll .print-header-copy h1 { font-size: 12px; }
+  .print-fee-receipt.ack-roll .print-header-copy p { font-size: 8.5px; }
+  .print-fee-receipt.ack-roll .print-row { padding: 3px 0; }
+  .print-fee-receipt.ack-roll .print-columns { display: block; }
+  .print-fee-receipt.ack-roll .print-columns > div + div { margin-top: 8px; }
+}
+
 /* Neon digital clock in the sidebar ------------------------------------------
    It sits where the profile box used to be, so it keeps that box's footprint:
    the same width, and the same radius and rhythm as the rest of the sidebar.

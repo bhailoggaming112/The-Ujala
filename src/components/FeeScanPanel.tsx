@@ -71,6 +71,10 @@ export function FeeScanPanel({ today, onToast, onPaid }: {
       receiptNumber: '',
       challanNumber: challan.challan_number ?? challan.admission_number ?? '',
       source: 'scan',
+      dueFee: challan.remaining,
+      fine: 0,
+      concession: 0,
+      discount: 0,
     });
     setSaving(false);
     if (result.error) { setError(result.error); return; }

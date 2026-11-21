@@ -6,7 +6,7 @@ import { usePrintSheet } from '@/lib/usePrintSheet';
 import type { Student } from '@/lib/schoolTypes';
 import {
   EMPTY_PAYMENT_SETTINGS, HEAD_LABELS, challanDisplayNumber, challanScanCode, formatDay, formatMoney, formatStamp, monthLabel,
-  type ChallanDocument, type FeeHeads, type FeePayment, type FeeSummary, type PaymentSettings,
+  payableFee, type ChallanDocument, type FeeHeads, type FeePayment, type FeeSummary, type PaymentSettings,
 } from '@/lib/fees';
 
 const headKeys: (keyof FeeHeads)[] = ['tuition_fee', 'admission_misc', 'exam_lab', 'transport', 'arrears', 'late_fine', 'concession'];
@@ -33,30 +33,34 @@ function SchoolMark({ onSettled }: { onSettled?: () => void }) {
   );
 }
 
-function ReceiptSheet({ payment, student, summary, onLogo }: {
+export type ReceiptLayout = 'a5' | 'thermal';
+
+function ReceiptSheet({ payment, student, summary, layout, onLogo }: {
   payment: FeePayment;
   student: Student | null;
   summary: FeeSummary | null;
+  layout: ReceiptLayout;
   onLogo: () => void;
 }) {
   const details: { label: string; value: string }[] = [
-    { label: 'Receipt no.', value: payment.receipt_number },
-    { label: 'Payment date', value: formatDay(payment.payment_date) },
-    { label: 'Student', value: student?.full_name ?? payment.student_name },
-    { label: 'Admission no.', value: student?.admission_number ?? payment.admission_number ?? '—' },
-    { label: 'Class', value: student ? `${student.class_name} · Section ${student.section_name}` : `${payment.class_name ?? '—'} · ${payment.section_name ?? '—'}` },
-    { label: 'Father’s name', value: student?.fathers_name || '—' },
-    { label: 'Payment method', value: payment.method.charAt(0).toUpperCase() + payment.method.slice(1) },
-    { label: 'Received by', value: formatStamp(payment.created_at) },
+    { label: 'Adm. No.', value: student?.admission_number ?? payment.admission_number ?? '—' },
+    { label: 'Dated', value: formatDay(payment.payment_date) },
+    { label: 'Student Name', value: student?.full_name ?? payment.student_name },
+    { label: 'Father Name', value: student?.fathers_name || payment.fathers_name || '—' },
+    { label: 'Class / Section', value: student ? `${student.class_name} / ${student.section_name}` : `${payment.class_name ?? '—'} / ${payment.section_name ?? '—'}` },
   ];
+  const due = payment.due_fee ?? summary?.totalPayable ?? Number(payment.amount) + Number(payment.balance_after);
 
   return (
-    <section className="print-only print-fee-receipt">
+    <section className={`print-only print-fee-receipt ${layout === 'a5' ? 'ack-a5' : 'ack-roll'}`}>
+      {/* An 80mm roll needs the page itself narrowed, not just the layout. Only one print
+          sheet is ever mounted at a time, so this cannot leak onto another document. */}
+      {layout === 'thermal' && <style>{'@page { size: 80mm auto; margin: 3mm; }'}</style>}
       <div className="print-header">
         <SchoolMark onSettled={onLogo} />
         <div className="print-header-copy">
           <h1>{SCHOOL_NAME}</h1>
-          <p>Fee Receipt</p>
+          <p>Acknowledgment Receipt</p>
         </div>
         <div className="print-header-admitted">
           <span>Receipt No.</span>
@@ -65,39 +69,38 @@ function ReceiptSheet({ payment, student, summary, onLogo }: {
       </div>
       <div className="print-columns">
         <div>
-          <h2>Receipt Details</h2>
+          <h2>Student Details</h2>
           {details.map((detail) => (
             <div className="print-row" key={detail.label}>
               <span className="print-row-label">{detail.label}</span>
               <span className="print-row-value">{detail.value}</span>
             </div>
           ))}
-          {payment.remarks && (
-            <div className="print-row">
-              <span className="print-row-label">Remarks</span>
-              <span className="print-row-value">{payment.remarks}</span>
-            </div>
-          )}
+          <div className="print-row"><span className="print-row-label">Payment method</span><span className="print-row-value capitalize">{payment.method}</span></div>
         </div>
         <div>
-          <h2>Fee Account</h2>
-          {summary && (
-            <>
-              <div className="print-row"><span className="print-row-label">Previous arrears</span><span className="print-row-value">{formatMoney(summary.previousArrears)}</span></div>
-              <div className="print-row"><span className="print-row-label">Current monthly fee</span><span className="print-row-value">{formatMoney(summary.currentMonthlyFee)}</span></div>
-              <div className="print-row"><span className="print-row-label">Concession</span><span className="print-row-value">−{formatMoney(summary.concession)}</span></div>
-              {summary.fine > 0 && <div className="print-row"><span className="print-row-label">Late fine</span><span className="print-row-value">{formatMoney(summary.fine)}</span></div>}
-              <div className="print-row"><span className="print-row-label">Total payable</span><span className="print-row-value">{formatMoney(summary.totalPayable)}</span></div>
-            </>
-          )}
-          <div className="print-row"><span className="print-row-label">Amount received</span><span className="print-row-value">−{formatMoney(payment.amount)}</span></div>
-          <div className="print-row"><span className="print-row-label">Balance after this receipt</span><span className="print-row-value">{formatMoney(payment.balance_after)}</span></div>
+          <h2>Fee Breakdown</h2>
+          <div className="print-row"><span className="print-row-label">Due Fee</span><span className="print-row-value">{formatMoney(due)}</span></div>
+          <div className="print-row"><span className="print-row-label">Fine / Late Fee</span><span className="print-row-value">{formatMoney(payment.fine_amount)}</span></div>
+          <div className="print-row"><span className="print-row-label">Fee Concession</span><span className="print-row-value">−{formatMoney(payment.concession)}</span></div>
+          {payment.discount > 0 && <div className="print-row"><span className="print-row-label">Discount</span><span className="print-row-value">−{formatMoney(payment.discount)}</span></div>}
+          <div className="print-row total"><span className="print-row-label">Total Fee Payable</span><span className="print-row-value">{formatMoney(payableFee(due, payment.fine_amount, payment.concession, payment.discount))}</span></div>
+          <div className="print-row"><span className="print-row-label">Fee Paid</span><span className="print-row-value">{formatMoney(payment.amount)}</span></div>
+          <div className="print-row total"><span className="print-row-label">Balance</span><span className="print-row-value">{formatMoney(payment.balance_after)}</span></div>
         </div>
+      </div>
+      <div className="print-remarks">
+        <span>Remarks</span>
+        <p>{payment.remarks || '—'}</p>
       </div>
       <div className="print-signatures">
         <div className="print-signature"><span>Received By</span></div>
         <div className="print-signature"><span>Authorised Signature</span></div>
       </div>
+      <p className="print-timestamp">
+        Printed on {formatStamp(new Date().toISOString())}
+        {payment.edit_count > 0 ? ` · Last corrected ${formatStamp(payment.updated_at ?? payment.created_at)}` : ''}
+      </p>
     </section>
   );
 }
@@ -109,71 +112,100 @@ export function FeeReceiptView({ payment, student, summary, onClose }: {
   onClose: () => void;
 }) {
   const [logoSettled, setLogoSettled] = useState(false);
+  const [layout, setLayout] = useState<ReceiptLayout>('a5');
   useAutoPrint(logoSettled);
   const printSheet = usePrintSheet(true, (
-    <ReceiptSheet payment={payment} student={student} summary={summary} onLogo={() => setLogoSettled(true)} />
+    <ReceiptSheet payment={payment} student={student} summary={summary} layout={layout} onLogo={() => setLogoSettled(true)} />
   ));
+
+  const due = payment.due_fee ?? summary?.totalPayable ?? Number(payment.amount) + Number(payment.balance_after);
+  const lines: { label: string; value: string; tone?: string }[] = [
+    { label: 'Due Fee', value: formatMoney(due) },
+    { label: 'Fine / Late Fee', value: formatMoney(payment.fine_amount) },
+    { label: 'Fee Concession', value: `−${formatMoney(payment.concession)}` },
+    ...(payment.discount > 0 ? [{ label: 'Discount', value: `−${formatMoney(payment.discount)}` }] : []),
+    { label: 'Total Fee Payable', value: formatMoney(payableFee(due, payment.fine_amount, payment.concession, payment.discount)), tone: 'strong' },
+    { label: 'Fee Paid', value: formatMoney(payment.amount), tone: 'credit' },
+    { label: 'Balance', value: formatMoney(payment.balance_after), tone: 'strong' },
+  ];
+  const identity: [string, string][] = [
+    ['Adm. No.', student?.admission_number ?? payment.admission_number ?? '—'],
+    ['Dated', formatDay(payment.payment_date)],
+    ['Student Name', student?.full_name ?? payment.student_name],
+    ['Father Name', student?.fathers_name || payment.fathers_name || '—'],
+    ['Class / Section', student ? `${student.class_name} / ${student.section_name}` : `${payment.class_name ?? '—'} / ${payment.section_name ?? '—'}`],
+  ];
 
   return (
     <div className="notice-overlay">
-      <section className="notice-modal">
-        <div className="notice-preview-top">
+      <section className="notice-modal ack-modal">
+        <div className="notice-preview-top no-print">
           <div className="flex items-center gap-4">
             <img src="/New_LOGO_Final.PNG" alt={`${SCHOOL_NAME} logo`} className="h-14 w-14 object-contain" />
             <div>
-              <span className="eyebrow">Fee receipt</span>
+              <span className="eyebrow">Acknowledgment receipt</span>
               <h2 className="mt-1 text-xl font-bold text-slate-800">{SCHOOL_NAME}</h2>
             </div>
           </div>
           <button className="close-button no-print" onClick={onClose} aria-label="Close receipt"><X size={18} /></button>
         </div>
 
-        <div className="fee-receipt-total">
-          <span>Amount received</span>
-          <strong>{formatMoney(payment.amount)}</strong>
-          <small>Receipt {payment.receipt_number} · {formatDay(payment.payment_date)} · {payment.method}</small>
+        <div className="ack-layout-picker no-print" role="tablist" aria-label="Receipt paper size">
+          {([['a5', 'A5 sheet'], ['thermal', '80mm roll']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={layout === value}
+              className={`ack-layout-tab ${layout === value ? 'on' : ''}`}
+              onClick={() => setLayout(value)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        <dl className="mt-5 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-          <div className="border-b border-slate-100 pb-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Student</dt>
-            <dd className="mt-1 text-sm text-slate-800">{student?.full_name ?? payment.student_name}</dd>
-          </div>
-          <div className="border-b border-slate-100 pb-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admission no.</dt>
-            <dd className="mt-1 text-sm text-slate-800">{student?.admission_number ?? payment.admission_number ?? '—'}</dd>
-          </div>
-          <div className="border-b border-slate-100 pb-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Class</dt>
-            <dd className="mt-1 text-sm text-slate-800">
-              {student ? `${student.class_name} · Section ${student.section_name}` : `${payment.class_name ?? '—'} · ${payment.section_name ?? '—'}`}
-            </dd>
-          </div>
-          <div className="border-b border-slate-100 pb-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment method</dt>
-            <dd className="mt-1 text-sm capitalize text-slate-800">{payment.method}</dd>
-          </div>
-          {payment.remarks && (
-            <div className="border-b border-slate-100 pb-3 sm:col-span-2">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Remarks</dt>
-              <dd className="mt-1 text-sm text-slate-800">{payment.remarks}</dd>
+        <div className={`ack-paper ${layout}`}>
+          <div className="ack-head">
+            <img src="/New_LOGO_Final.PNG" alt="" />
+            <div>
+              <h2>{SCHOOL_NAME}</h2>
+              <span>Acknowledgment</span>
             </div>
-          )}
-        </dl>
+          </div>
 
-        <div className="mt-6 rounded-xl bg-slate-50 px-5 py-4">
-          {summary && (
-            <>
-              <div className="fee-receipt-line"><span>Previous arrears</span><strong>{formatMoney(summary.previousArrears)}</strong></div>
-              <div className="fee-receipt-line"><span>Current monthly fee</span><strong>{formatMoney(summary.currentMonthlyFee)}</strong></div>
-              <div className="fee-receipt-line"><span>Concession</span><strong>−{formatMoney(summary.concession)}</strong></div>
-              {summary.fine > 0 && <div className="fee-receipt-line"><span>Late fine</span><strong>{formatMoney(summary.fine)}</strong></div>}
-              <div className="fee-receipt-line"><span>Total payable</span><strong>{formatMoney(summary.totalPayable)}</strong></div>
-            </>
-          )}
-          <div className="fee-receipt-line highlight">
-            <span>Balance after this receipt</span>
-            <strong>{formatMoney(payment.balance_after)}</strong>
+          <div className="ack-identity">
+            {identity.map(([label, value]) => (
+              <div key={label}><span>{label}</span><strong>{value}</strong></div>
+            ))}
+          </div>
+
+          <table className="ack-table">
+            <tbody>
+              {lines.map((line) => (
+                <tr key={line.label} className={line.tone ? `ack-${line.tone}` : undefined}>
+                  <th>{line.label}</th>
+                  <td>{line.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="ack-remarks">
+            <span>Remarks</span>
+            <p>{payment.remarks || '—'}</p>
+          </div>
+
+          <div className="ack-foot">
+            <div className="ack-meta">
+              <span>Receipt No. <strong>{payment.receipt_number}</strong></span>
+              <span>Received by <strong>{payment.method}</strong></span>
+              {payment.edit_count > 0 && <span>Last corrected <strong>{formatStamp(payment.updated_at ?? payment.created_at)}</strong></span>}
+              <span>Printed on <strong>{formatStamp(new Date().toISOString())}</strong></span>
+            </div>
+            <div className="ack-sign">
+              <span>Received By</span>
+            </div>
           </div>
         </div>
 

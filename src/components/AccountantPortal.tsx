@@ -133,7 +133,6 @@ export function AccountantPortal({ onToast }: { onToast: (message: string) => vo
       {view === 'receive' && (
         <AccountantReceiveFee
           students={activeStudents}
-          structures={structures}
           payments={payments}
           loading={loading}
           today={today}
