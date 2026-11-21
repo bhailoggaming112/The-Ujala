@@ -1310,6 +1310,15 @@ input[dir="rtl"]:focus {
 .absentee-sync .spin { animation: absentee-spin 1s linear infinite; }
 @keyframes absentee-spin { to { transform: rotate(360deg); } }
 
+.absentee-toolbar { display: flex; flex-direction: column; gap: 14px; }
+.absentee-toolbar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.absentee-toolbar-head h2 { margin: 4px 0 0; font-size: 19px; line-height: 1.25; color: #22333d; }
+.absentee-toolbar .panel-subtitle { margin: 6px 0 0; max-width: 62ch; color: #5d707c; font-size: 13px; line-height: 1.55; }
+.absentee-toolbar-controls { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid #eaf2f7; }
+.absentee-toolbar-controls .control-field { margin: 0; }
+
+.absentee-queue { display: flex; flex-direction: column; gap: 14px; }
+
 .absentee-template { border: 1px solid #dbe7ee; border-radius: 14px; padding: 16px; background: linear-gradient(180deg, #f8fbfd, #ffffff); display: flex; flex-direction: column; gap: 12px; }
 .absentee-template-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .absentee-template-note { color: #61798a; font-size: 12.5px; }
@@ -1383,3 +1392,25 @@ input[dir="rtl"]:focus {
 @media print {
   .absentee-panel, .sms-day-strip { display: none !important; }
 }
+
+/* ===========================================================
+   Urdu text — Nastaliq face, right-to-left, right aligned
+   Applied to the alert textarea, the live preview and the
+   message cells so Urdu reads naturally instead of wrapping
+   mid-word in a Latin face.
+   =========================================================== */
+.urdu-text,
+.urdu-text textarea,
+textarea.urdu-text {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', serif;
+  direction: rtl;
+  text-align: right;
+  line-height: 2.1;
+  font-size: 14px;
+}
+
+.urdu-text::placeholder { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', serif; }
+
+td.urdu-text { line-height: 1.9; font-size: 13px; }
+
+.absentee-preview p.urdu-text { line-height: 2.1; font-size: 14.5px; }

@@ -7,12 +7,12 @@ import { supabase } from '@/lib/supabase';
 import type { Student } from '@/lib/schoolTypes';
 import { StudentPhoto } from '@/components/StudentPhoto';
 import { SmsReport } from '@/components/SmsReport';
-import { AbsenteeAlertsPanel } from '@/components/AbsenteeAlertsPanel';
 import { DmcSheet } from '@/components/DmcSheet';
 import { DailyOverviewPanel, MonthlyReportPanel, type ClassSubmission } from '@/components/AttendanceOverviewPanels';
 import { SchoolCalendarSettings } from '@/components/SchoolCalendarSettings';
 import { createDmcDraft, createMarksRows, type DmcDraft, type DmcMarksRow } from '@/lib/dmc';
 import { loadSchoolCalendar, removeCalendarDay, saveCalendarDay, saveCalendarPolicy } from '@/lib/schoolCalendar';
+import { syncAbsenteesForDate } from '@/lib/absenteeAlerts';
 import { useAuth } from '@/lib/auth';
 import {
   DEFAULT_CALENDAR_POLICY, attendancePercentage, countByStatus, formatPercentage, monthStart, summariseAttendance, todayKey,
@@ -230,9 +230,14 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
     setSaving(false);
     setConfirm(null);
     if (error) { onToast('Attendance could not be saved. Please try again.'); return; }
-    onToast(`Attendance saved for ${activeClass} · Section ${shownSection}`);
     setDraft({});
     await loadAttendance(date);
+    // Saved absences flow straight into the absentee alert list, which in turn raises
+    // the parent portal absence notice.
+    const syncError = await syncAbsenteesForDate(date);
+    onToast(syncError
+      ? `Attendance saved for ${activeClass} · Section ${shownSection}. The absentee list could not be refreshed.`
+      : `Attendance saved for ${activeClass} · Section ${shownSection}. Absent parents have been notified in the portal.`);
   };
 
   const deleteAttendance = async () => {
@@ -398,8 +403,6 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
               <p className="att-quick-hint">Mark everyone present in one tap, then click Absent, Late or Leave on the students who are away before saving.</p>
             </div>
           </div>
-
-          <AbsenteeAlertsPanel forDate={date} absentees={absentees} onToast={onToast} />
 
           <div className="panel roster-panel section-students-panel">
             <div className="att-roster-head">

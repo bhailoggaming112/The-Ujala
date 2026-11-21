@@ -1,8 +1,86 @@
 import { supabase } from '@/lib/supabase';
-import type { AbsenteeQueueEntry, AbsenteeTemplate, PortalNotification } from '@/lib/schoolTypes';
+import type { AbsenteeQueueEntry, AbsenteeTemplate, PortalNotification, Student } from '@/lib/schoolTypes';
+import { renderAbsenteeText } from '@/lib/noticeText';
 
 const QUEUE_COLUMNS =
   'id, student_id, student_name, class_name, section_name, parent_phone, attendance_date, language, message_body, status, sent_at, created_at';
+
+// The register only needs the handful of fields an alert uses, so the row is typed
+// narrowly instead of pretending it is a full student record.
+export type AbsentStudent = Pick<
+  Student,
+  'id' | 'full_name' | 'class_name' | 'section_name' | 'status'
+  | 'guardian_phone' | 'messaging_number' | 'father_contact_number' | 'whatsapp_number'
+>;
+
+const guardianNumber = (student: AbsentStudent) =>
+  student.guardian_phone || student.messaging_number || student.father_contact_number || student.whatsapp_number || null;
+
+export function buildAbsenteeEntries(
+  language: AbsenteeTemplate['language'],
+  templateText: string,
+  roster: AbsentStudent[],
+  forDate: string,
+): NewAbsenteeEntry[] {
+  return roster.map((student) => ({
+    student_id: student.id,
+    student_name: student.full_name,
+    class_name: student.class_name,
+    section_name: student.section_name,
+    parent_phone: guardianNumber(student),
+    attendance_date: forDate,
+    language,
+    message_body: renderAbsenteeText(templateText, {
+      student_name: student.full_name,
+      class_name: student.class_name,
+      section_name: student.section_name,
+      date: forDate,
+    }),
+  }));
+}
+
+// Every absence saved for the date, across all classes and sections, so the office
+// can work through a whole day in one pass.
+export async function fetchAbsentStudentsForDate(forDate: string): Promise<{ students: AbsentStudent[]; error: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('school_attendance')
+      .select('student_id, student:school_students(id, full_name, class_name, section_name, status, guardian_phone, messaging_number, father_contact_number, whatsapp_number)')
+      .eq('attendance_date', forDate)
+      .eq('status', 'absent');
+    if (error) return { students: [], error: error.message };
+    const rows = (data ?? []) as unknown as { student_id: string; student: AbsentStudent | null }[];
+    const students = rows.flatMap((row) => (row.student ? [row.student] : []))
+      .filter((student) => student.status !== 'withdrawn');
+    return { students, error: null };
+  } catch {
+    return { students: [], error: 'The absentee list could not be loaded.' };
+  }
+}
+
+// Called after the register is saved: pulls the saved absences for the day into the
+// alert list using the school's current wording. Adding a row is what raises the
+// parent portal absence notice, so saving the register notifies parents on its own.
+export async function syncAbsenteesForDate(forDate: string): Promise<string | null> {
+  const [language, templates, roster] = await Promise.all([
+    fetchAbsenteeLanguage(),
+    fetchAbsenteeTemplates(),
+    fetchAbsentStudentsForDate(forDate),
+  ]);
+  if (roster.error) return roster.error;
+
+  const saved = templates.error
+    ? ''
+    : (templates.templates.find((template) => template.language === language)?.template_text ?? '');
+  if (!saved.trim()) return null;
+
+  const result = await syncAbsentees(
+    buildAbsenteeEntries(language, saved, roster.students, forDate),
+    roster.students.map((student) => student.id),
+    forDate,
+  );
+  return result.error;
+}
 
 export type NewAbsenteeEntry = {
   student_id: string;

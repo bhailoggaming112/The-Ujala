@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCheck, Clock, Loader2, MessageCircle, Save, Send, Trash2, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { CheckCheck, Clock, Loader2, MessageCircle, RefreshCw, Save, Send, Trash2, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { AbsenteeQueueEntry, AbsenteeTemplate, Student } from '@/lib/schoolTypes';
+import type { AbsenteeQueueEntry, AbsenteeTemplate } from '@/lib/schoolTypes';
 import { renderAbsenteeText, SCHOOL_NAME, SCHOOL_NAME_UR } from '@/lib/noticeText';
+import { todayKey } from '@/lib/attendance';
 import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
 import {
-  fetchAbsenteeLanguage, fetchAbsenteeQueue, fetchAbsenteeTemplates, markAbsenteesSent, removeAbsentees,
-  saveAbsenteeLanguage, saveAbsenteeTemplate, syncAbsentees, type NewAbsenteeEntry,
+  buildAbsenteeEntries, fetchAbsenteeLanguage, fetchAbsenteeQueue, fetchAbsenteeTemplates,
+  fetchAbsentStudentsForDate, markAbsenteesSent, removeAbsentees, saveAbsenteeLanguage,
+  saveAbsenteeTemplate, syncAbsentees,
 } from '@/lib/absenteeAlerts';
 
 const DEFAULT_WORDING: Record<AbsenteeTemplate['language'], string> = {
@@ -16,17 +18,6 @@ const DEFAULT_WORDING: Record<AbsenteeTemplate['language'], string> = {
 
 const PLACEHOLDERS = ['{student_name}', '{class}', '{date}', '{school_name}'];
 
-// The register only needs the handful of fields the alert uses, so the row is
-// typed narrowly instead of pretending it is a full student record.
-type AbsentStudent = Pick<
-  Student,
-  'id' | 'full_name' | 'class_name' | 'section_name' | 'status'
-  | 'guardian_phone' | 'messaging_number' | 'father_contact_number' | 'whatsapp_number'
->;
-
-const guardianNumber = (student: AbsentStudent) =>
-  student.guardian_phone || student.messaging_number || student.father_contact_number || student.whatsapp_number || null;
-
 const clampPause = (value: string, fallback: number) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
@@ -35,13 +26,8 @@ const clampPause = (value: string, fallback: number) => {
 
 const wait = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
 
-export function AbsenteeAlertsPanel({
-  forDate, absentees, onToast,
-}: {
-  forDate: string;
-  absentees: Student[];
-  onToast: (message: string) => void;
-}) {
+export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (message: string) => void; onQueueChanged?: () => void }) {
+  const [forDate, setForDate] = useState(todayKey);
   const [language, setLanguage] = useState<AbsenteeTemplate['language']>('English');
   const [wording, setWording] = useState<Record<AbsenteeTemplate['language'], string>>({ ...DEFAULT_WORDING });
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
@@ -49,7 +35,9 @@ export function AbsenteeAlertsPanel({
   const [queueError, setQueueError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [savingWording, setSavingWording] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // The chosen language and the ticked rows are staged on screen; the ticked rows
+  // are written only when the office presses "Send selected alerts".
+  const [draftSelected, setDraftSelected] = useState<string[]>([]);
   const [pause, setPause] = useState({ min: '3', max: '8' });
   const [sending, setSending] = useState(false);
   const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null);
@@ -59,10 +47,10 @@ export function AbsenteeAlertsPanel({
   const committedWording = useRef<Record<AbsenteeTemplate['language'], string>>({ ...DEFAULT_WORDING });
   const [wordingVersion, setWordingVersion] = useState(0);
   const [reloadToken, setReloadToken] = useState(0);
-
-  // The list covers the whole day, not just the section on screen, so switching
-  // section never hides a student who is already waiting to be messaged.
-  const absentKey = useMemo(() => absentees.map((student) => student.id).sort().join('|'), [absentees]);
+  // Held in a ref so the count callback's changing identity cannot retrigger the
+  // effect below on every render.
+  const queueChanged = useRef(onQueueChanged);
+  queueChanged.current = onQueueChanged;
 
   // The chosen language is a school-wide setting, so it is loaded once and stored
   // back whenever it changes.
@@ -85,49 +73,24 @@ export function AbsenteeAlertsPanel({
     return () => { cancelled = true; };
   }, []);
 
-  const buildEntries = useCallback((lang: AbsenteeTemplate['language'], text: string, roster: AbsentStudent[]): NewAbsenteeEntry[] =>
-    roster.map((student) => ({
-      student_id: student.id,
-      student_name: student.full_name,
-      class_name: student.class_name,
-      section_name: student.section_name,
-      parent_phone: guardianNumber(student),
-      attendance_date: forDate,
-      language: lang,
-      message_body: renderAbsenteeText(text, {
-        student_name: student.full_name,
-        class_name: student.class_name,
-        section_name: student.section_name,
-        date: forDate,
-      }),
-    })), [forDate]);
-
-  // Only saved absences raise a parent notice, so a mark that is still being
-  // decided on screen does not message anyone yet. The list covers the whole day,
-  // which is why it is read back from the register rather than taken from the
-  // section on screen.
+  // The list shows every absence saved for the chosen date, across all classes and
+  // sections, so the office can work through a whole day in one pass.
   useEffect(() => {
     if (!templatesLoaded) return;
     let cancelled = false;
     setSyncing(true);
     void (async () => {
-      const { data } = await supabase
-        .from('school_attendance')
-        .select('student_id, student:school_students(id, full_name, class_name, section_name, status, guardian_phone, messaging_number, father_contact_number, whatsapp_number)')
-        .eq('attendance_date', forDate)
-        .eq('status', 'absent');
-
-      const rows = (data ?? []) as unknown as { student_id: string; student: AbsentStudent | null }[];
-      const saved = rows.flatMap((row) => (row.student ? [row.student] : []));
-      // Any absence on screen that has not been saved yet is kept in the list so it
-      // is not lost when the office saves the register a moment later.
-      const merged = new Map<string, AbsentStudent>(saved.map((student) => [student.id, student]));
-      for (const student of absentees) if (!merged.has(student.id)) merged.set(student.id, student);
-      const list = Array.from(merged.values()).filter((student) => student.status !== 'withdrawn');
+      const roster = await fetchAbsentStudentsForDate(forDate);
+      if (cancelled) return;
+      if (roster.error) {
+        setQueueError(roster.error);
+        setSyncing(false);
+        return;
+      }
 
       const result = await syncAbsentees(
-        buildEntries(language, committedWording.current[language], list),
-        list.map((student) => student.id),
+        buildAbsenteeEntries(language, committedWording.current[language], roster.students, forDate),
+        roster.students.map((student) => student.id),
         forDate,
       );
       if (cancelled) return;
@@ -136,24 +99,28 @@ export function AbsenteeAlertsPanel({
       } else {
         setQueue(result.entries);
         setQueueError(null);
-        setSelectedIds((current) => current.filter((id) => result.entries.some((entry) => entry.id === id)));
+        setDraftSelected((current) => current.filter((id) => result.entries.some((entry) => entry.id === id)));
       }
       setSyncing(false);
     })();
     return () => { cancelled = true; };
-  }, [templatesLoaded, absentKey, forDate, language, wordingVersion, reloadToken, buildEntries, absentees]);
+  }, [templatesLoaded, forDate, language, wordingVersion, reloadToken]);
 
-  const queued = queue.filter((entry) => entry.status === 'queued');
+  const queuedRows = queue.filter((entry) => entry.status === 'queued');
+  const toSend = queuedRows.filter((entry) => draftSelected.includes(entry.id));
+  const previewEntry = toSend[0] ?? queuedRows[0] ?? null;
+
   const sent = queue.filter((entry) => entry.status === 'sent');
-  const selectedQueued = queued.filter((entry) => selectedIds.includes(entry.id));
-  const allSelected = queued.length > 0 && selectedQueued.length === queued.length;
+  const allSelected = queuedRows.length > 0 && toSend.length === queuedRows.length;
 
-  const previewStudent = absentees[0] ?? null;
-  const preview = previewStudent
+  // Keeps the sidebar count in step whenever the list of waiting alerts changes.
+  useEffect(() => { queueChanged.current?.(); }, [queuedRows.length]);
+
+  const preview = previewEntry
     ? renderAbsenteeText(wording[language], {
-      student_name: previewStudent.full_name,
-      class_name: previewStudent.class_name,
-      section_name: previewStudent.section_name,
+      student_name: previewEntry.student_name,
+      class_name: previewEntry.class_name ?? '',
+      section_name: previewEntry.section_name ?? '',
       date: forDate,
     })
     : '';
@@ -174,24 +141,27 @@ export function AbsenteeAlertsPanel({
     committedWording.current = { ...committedWording.current, [language]: text };
     setSavingWording(false);
     setWordingVersion((current) => current + 1);
-    onToast(`${language} wording saved${queued.length > 0 ? ' and applied to the waiting rows below' : ''}.`);
+    onToast(`${language} wording saved${queuedRows.length > 0 ? ' and applied to the waiting rows below' : ''}.`);
   };
 
   const refresh = () => setReloadToken((current) => current + 1);
 
-  const toggleOne = (id: string) => setSelectedIds((current) =>
+  // Ticking a row only stages it. Nothing is written until "Send selected alerts"
+  // is pressed, so a stray tap cannot queue or send a message.
+  const toggleOne = (id: string) => setDraftSelected((current) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
 
-  const toggleAll = (checked: boolean) => setSelectedIds(checked ? queued.map((entry) => entry.id) : []);
+  const toggleAll = (checked: boolean) => setDraftSelected(checked ? queuedRows.map((entry) => entry.id) : []);
 
   const deleteSelected = async () => {
-    if (selectedQueued.length === 0) { onToast('Tick the rows you want to remove first.'); return; }
-    const error = await removeAbsentees(selectedQueued.map((entry) => entry.id));
+    if (toSend.length === 0) { onToast('Tick the rows you want to remove first.'); return; }
+    const ids = toSend.map((entry) => entry.id);
+    const error = await removeAbsentees(ids);
     if (error) { onToast(error); return; }
     const reloaded = await fetchAbsenteeQueue(forDate);
     if (!reloaded.error) setQueue(reloaded.entries);
-    setSelectedIds([]);
-    onToast(`${selectedQueued.length} row${selectedQueued.length === 1 ? '' : 's'} removed from the absentee list.`);
+    setDraftSelected((current) => current.filter((id) => !ids.includes(id)));
+    onToast(`${ids.length} row${ids.length === 1 ? '' : 's'} removed from the absentee list.`);
   };
 
   const minPause = clampPause(pause.min, 3);
@@ -202,12 +172,12 @@ export function AbsenteeAlertsPanel({
   // Sending one at a time with a random pause between messages keeps the school
   // number from being flagged for bulk messaging.
   const sendSelected = async () => {
-    if (selectedQueued.length === 0) { onToast('Tick the students you want to message first.'); return; }
+    if (toSend.length === 0) { onToast('Tick the students you want to message first.'); return; }
     cancelSend.current = false;
     setSending(true);
-    setSendProgress({ done: 0, total: selectedQueued.length });
+    setSendProgress({ done: 0, total: toSend.length });
 
-    const log = await queueSmsMessages(selectedQueued.map((entry) => ({
+    const log = await queueSmsMessages(toSend.map((entry) => ({
       student_id: entry.student_id,
       student_name: entry.student_name,
       class_name: entry.class_name,
@@ -225,16 +195,16 @@ export function AbsenteeAlertsPanel({
     }
 
     const sentIds: string[] = [];
-    for (let index = 0; index < selectedQueued.length; index += 1) {
+    for (let index = 0; index < toSend.length; index += 1) {
       if (cancelSend.current) break;
-      const entry = selectedQueued[index];
+      const entry = toSend[index];
       if (index > 0) {
         const delay = lowPause + Math.random() * (highPause - lowPause);
         await wait(delay * 1000);
       }
       if (cancelSend.current) break;
       sentIds.push(entry.id);
-      setSendProgress({ done: index + 1, total: selectedQueued.length });
+      setSendProgress({ done: index + 1, total: toSend.length });
     }
 
     const logIds = log.ids.slice(0, sentIds.length);
@@ -248,7 +218,7 @@ export function AbsenteeAlertsPanel({
       }
       const reloaded = await fetchAbsenteeQueue(forDate);
       if (!reloaded.error) setQueue(reloaded.entries);
-      setSelectedIds((current) => current.filter((id) => !sentIds.includes(id)));
+      setDraftSelected((current) => current.filter((id) => !sentIds.includes(id)));
       refresh();
     } else {
       await supabase.from('school_sms_log').delete().in('id', log.ids);
@@ -261,25 +231,32 @@ export function AbsenteeAlertsPanel({
   const schoolHeading = language === 'Urdu' ? SCHOOL_NAME_UR : SCHOOL_NAME;
 
   return (
-    <div className="panel absentee-panel">
-      <div className="panel-header">
-        <div>
-          <span className="eyebrow">Send absentee SMS</span>
-          <h2>{schoolHeading} · {absentees.length} absentee{absentees.length === 1 ? '' : 's'} on {renderAbsenteeText('{date}', {
-            student_name: '', class_name: '', section_name: '', date: forDate,
-          })}</h2>
-          <p className="panel-subtitle">
-            Every student marked absent is added to this list automatically, and an absence notice appears in their parent portal straight away.
-          </p>
+    <div className="absentee-panel">
+      <div className="panel absentee-toolbar">
+        <div className="absentee-toolbar-head">
+          <div>
+            <span className="eyebrow">Send absentee SMS</span>
+            <h2>{schoolHeading} · {queuedRows.length} alert{queuedRows.length === 1 ? '' : 's'} waiting to send</h2>
+            <p className="panel-subtitle">
+              Every absence saved in the Daily Attendance register lands here on its own, and an absence notice appears in the parent portal straight away.
+            </p>
+          </div>
+          <span className={`absentee-sync ${syncing ? 'busy' : ''}`}>
+            {syncing ? <><Loader2 size={14} className="spin" /> Syncing…</> : <><CheckCheck size={14} /> List up to date</>}
+          </span>
         </div>
-        <span className={`absentee-sync ${syncing ? 'busy' : ''}`}>
-          {syncing ? <><Loader2 size={14} className="spin" /> Syncing…</> : <><CheckCheck size={14} /> List up to date</>}
-        </span>
+        <div className="absentee-toolbar-controls">
+          <label className="control-field">Absence date
+            <input type="date" value={forDate} onChange={(event) => setForDate(event.target.value)} />
+          </label>
+          <button type="button" className="secondary-button" onClick={() => setForDate(todayKey())}><RefreshCw size={15} /> Today</button>
+          <button type="button" className="secondary-button" onClick={refresh} disabled={syncing}><Loader2 size={15} className={syncing ? 'spin' : ''} /> Refresh list</button>
+        </div>
       </div>
 
       {queueError && <p className="dmc-warning">{queueError}</p>}
 
-      <div className="absentee-template">
+      <div className="panel absentee-template">
         <div className="absentee-template-head">
           <div className="segmented-control compact lang-toggle">
             {(['English', 'Urdu'] as const).map((lang) => (
@@ -295,6 +272,7 @@ export function AbsenteeAlertsPanel({
           <textarea
             rows={3}
             dir={language === 'Urdu' ? 'rtl' : 'ltr'}
+            className={language === 'Urdu' ? 'urdu-text' : undefined}
             value={wording[language]}
             onChange={(event) => setWording((current) => ({ ...current, [language]: event.target.value }))}
             placeholder="Write the absentee alert wording"
@@ -316,8 +294,12 @@ export function AbsenteeAlertsPanel({
         </div>
 
         <div className="absentee-preview">
-          <span className="absentee-preview-label">Preview{previewStudent ? ` · ${previewStudent.full_name}` : ''}</span>
-          <p dir={language === 'Urdu' ? 'rtl' : 'ltr'}>{preview || 'Write a message above to see how it will read.'}</p>
+          <span className="absentee-preview-label">
+            Preview{previewEntry ? ` · ${previewEntry.student_name}` : ''}{toSend.length > 0 ? ' (first selected row)' : ''}
+          </span>
+          <p className={language === 'Urdu' ? 'urdu-text' : undefined} dir={language === 'Urdu' ? 'rtl' : 'ltr'}>
+            {preview || 'Save the register in Daily Attendance and the wording will preview here.'}
+          </p>
         </div>
 
         <div className="absentee-template-actions">
@@ -334,20 +316,21 @@ export function AbsenteeAlertsPanel({
         </div>
       </div>
 
+      <div className="panel absentee-queue">
       <div className="absentee-queue-head">
         <div className="absentee-queue-stats">
-          <span className="absentee-chip queued"><Clock size={14} /> {queued.length} waiting</span>
+          <span className="absentee-chip queued"><Clock size={14} /> {queuedRows.length} waiting</span>
           <span className="absentee-chip sent"><CheckCheck size={14} /> {sent.length} sent</span>
           <span className="absentee-chip total"><Users size={14} /> {queue.length} on the list</span>
         </div>
         <div className="absentee-queue-actions">
-          <button type="button" className="secondary-button" onClick={() => toggleAll(true)} disabled={queued.length === 0 || allSelected}>
+          <button type="button" className="secondary-button" onClick={() => toggleAll(true)} disabled={queuedRows.length === 0 || allSelected}>
             Select all
           </button>
-          <button type="button" className="secondary-button" onClick={() => toggleAll(false)} disabled={selectedQueued.length === 0}>
+          <button type="button" className="secondary-button" onClick={() => toggleAll(false)} disabled={toSend.length === 0}>
             Unselect all
           </button>
-          <button type="button" className="secondary-button danger" onClick={() => void deleteSelected()} disabled={selectedQueued.length === 0 || sending}>
+          <button type="button" className="secondary-button danger" onClick={() => void deleteSelected()} disabled={toSend.length === 0 || sending}>
             <Trash2 size={15} /> Delete
           </button>
         </div>
@@ -377,7 +360,7 @@ export function AbsenteeAlertsPanel({
                   type="checkbox"
                   className="h-4 w-4 accent-sky-600"
                   checked={allSelected}
-                  disabled={queued.length === 0}
+                  disabled={queuedRows.length === 0}
                   onChange={(event) => toggleAll(event.target.checked)}
                   aria-label="Select all waiting alerts"
                 />
@@ -397,7 +380,7 @@ export function AbsenteeAlertsPanel({
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-sky-600"
-                    checked={selectedIds.includes(entry.id)}
+                    checked={draftSelected.includes(entry.id)}
                     disabled={entry.status === 'sent'}
                     onChange={() => toggleOne(entry.id)}
                     aria-label={`Select ${entry.student_name}`}
@@ -407,7 +390,12 @@ export function AbsenteeAlertsPanel({
                 <td>{entry.class_name ? `${entry.class_name} · ${entry.section_name ?? '—'}` : '—'}</td>
                 <td>{entry.parent_phone || '—'}</td>
                 <td><span className="absentee-lang">{entry.language}</span></td>
-                <td className="absentee-message" dir={entry.language === 'Urdu' ? 'rtl' : 'ltr'}>{entry.message_body || '—'}</td>
+                <td
+                  className={`absentee-message ${entry.language === 'Urdu' ? 'urdu-text' : ''}`}
+                  dir={entry.language === 'Urdu' ? 'rtl' : 'ltr'}
+                >
+                  {entry.message_body || '—'}
+                </td>
                 <td>
                   <span className={`absentee-status ${entry.status}`}>
                     {entry.status === 'sent' ? <><CheckCheck size={14} /> Sent</> : <><Clock size={14} /> Waiting</>}
@@ -420,18 +408,16 @@ export function AbsenteeAlertsPanel({
         {queue.length === 0 && !syncing && (
           <div className="empty-state large">
             <MessageCircle size={20} />
-            {absentees.length === 0
-              ? 'Nobody is marked absent for this date yet. Mark absentees in the register above and they will appear here automatically.'
-              : 'Adding the absent students to the alert list…'}
+            No absences are saved for this date yet. Save the register in Daily Attendance and the absentees will appear here on their own.
           </div>
         )}
       </div>
 
       <div className="absentee-send-bar">
         <span className="absentee-send-copy">
-          {selectedQueued.length === 0
+          {toSend.length === 0
             ? 'Tick the students to message, or use Select all.'
-            : `${selectedQueued.length} student${selectedQueued.length === 1 ? '' : 's'} selected · about ${Math.max(0, selectedQueued.length - 1) * ((lowPause + highPause) / 2) | 0}s of pauses`}
+            : `${toSend.length} student${toSend.length === 1 ? '' : 's'} selected · about ${Math.max(0, toSend.length - 1) * ((lowPause + highPause) / 2) | 0}s of pauses`}
         </span>
         <div className="absentee-send-actions">
           {sending && (
@@ -439,13 +425,14 @@ export function AbsenteeAlertsPanel({
               Stop after this one
             </button>
           )}
-          <button type="button" className="primary-button" onClick={() => void sendSelected()} disabled={sending || selectedQueued.length === 0}>
+          <button type="button" className="primary-button" onClick={() => void sendSelected()} disabled={sending || toSend.length === 0}>
             <Send size={16} />
             {sending && sendProgress
               ? `Sending ${sendProgress.done}/${sendProgress.total}…`
               : 'Send selected alerts'}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
