@@ -469,6 +469,11 @@ function PaymentDetailsCard({ settings, isAdmin, onToast, onSaved }: {
             <label className="control-field"><span>Bank name</span>
               <input value={draft.bank_name} onChange={(event) => update('bank_name', event.target.value)} placeholder="e.g. HBL, Meezan Bank" disabled={!isAdmin} />
             </label>
+            <label className="control-field"><span>Bank account title</span>
+              <input value={draft.bank_account_name} onChange={(event) => update('bank_account_name', event.target.value)} placeholder="Name the account is held in" disabled={!isAdmin} />
+            </label>
+          </div>
+          <div className="fee-form-row">
             <label className="control-field"><span>Bank account / IBAN no.</span>
               <input value={draft.bank_account_no} onChange={(event) => update('bank_account_no', event.target.value)} placeholder="e.g. PK36SCBL0000001123456702" disabled={!isAdmin} />
             </label>

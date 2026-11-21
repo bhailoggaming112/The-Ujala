@@ -191,7 +191,7 @@ function ChallanSheet({ challan, settings }: { challan: ChallanDocument; setting
   const copyLabel = 'Student Copy';
   const scanCode = challanScanCode(challan);
   const hasEasypaisa = Boolean(settings.easypaisa_account_no.trim());
-  const hasBank = Boolean(settings.bank_account_no.trim() || settings.bank_name.trim());
+  const hasBank = Boolean(settings.bank_account_no.trim() || settings.bank_name.trim() || settings.bank_account_name.trim());
 
   return (
     <section className="print-only print-challan">
@@ -256,6 +256,7 @@ function ChallanSheet({ challan, settings }: { challan: ChallanDocument; setting
                 {hasBank ? (
                   <>
                     <div className="print-row"><span className="print-row-label">Bank name</span><span className="print-row-value">{settings.bank_name.trim() || '—'}</span></div>
+                    <div className="print-row"><span className="print-row-label">Account title</span><span className="print-row-value">{settings.bank_account_name.trim() || '—'}</span></div>
                     <div className="print-row"><span className="print-row-label">Account / IBAN no.</span><span className="print-row-value">{settings.bank_account_no.trim() || '—'}</span></div>
                   </>
                 ) : (
@@ -331,12 +332,12 @@ export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClo
             {settings.easypaisa_account_no.trim() && (
               <p>Easypaisa account no. <strong>{settings.easypaisa_account_no}</strong>{settings.easypaisa_account_name.trim() ? ` · ${settings.easypaisa_account_name}` : ''}</p>
             )}
-            {(settings.bank_account_no.trim() || settings.bank_name.trim()) && (
+            {(settings.bank_account_no.trim() || settings.bank_name.trim() || settings.bank_account_name.trim()) && (
               <p>
-                {settings.bank_name.trim() ? `${settings.bank_name.trim()} ` : 'Bank '}account / IBAN no. <strong>{settings.bank_account_no.trim() || '—'}</strong>
+                {settings.bank_name.trim() ? `${settings.bank_name.trim()} ` : 'Bank '}account / IBAN no. <strong>{settings.bank_account_no.trim() || '—'}</strong>{settings.bank_account_name.trim() ? ` · ${settings.bank_account_name}` : ''}
               </p>
             )}
-            {!settings.easypaisa_account_no.trim() && !settings.bank_account_no.trim() && !settings.bank_name.trim() && (
+            {!settings.easypaisa_account_no.trim() && !settings.bank_account_no.trim() && !settings.bank_name.trim() && !settings.bank_account_name.trim() && (
               <p>No payment details are saved yet. An administrator can add them under Fee Structure.</p>
             )}
           </div>

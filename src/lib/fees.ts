@@ -110,11 +110,13 @@ export type PaymentSettings = {
   easypaisa_account_no: string;
   easypaisa_account_name: string;
   bank_name: string;
+  bank_account_name: string;
   bank_account_no: string;
 };
 
 export const EMPTY_PAYMENT_SETTINGS: PaymentSettings = {
-  easypaisa_account_no: '', easypaisa_account_name: '', bank_name: '', bank_account_no: '',
+  easypaisa_account_no: '', easypaisa_account_name: '',
+  bank_name: '', bank_account_name: '', bank_account_no: '',
 };
 
 // What the scan box learns from a scanned challan.
@@ -346,7 +348,7 @@ export async function fetchPaymentSettings(): Promise<{ settings: PaymentSetting
   try {
     const { data, error } = await supabase
       .from('school_payment_settings')
-      .select('easypaisa_account_no, easypaisa_account_name, bank_name, bank_account_no')
+      .select('easypaisa_account_no, easypaisa_account_name, bank_name, bank_account_name, bank_account_no')
       .eq('id', 1)
       .maybeSingle();
     if (error) return { settings: EMPTY_PAYMENT_SETTINGS, error: 'The payment details could not be loaded.' };
@@ -355,6 +357,7 @@ export async function fetchPaymentSettings(): Promise<{ settings: PaymentSetting
         easypaisa_account_no: data?.easypaisa_account_no ?? '',
         easypaisa_account_name: data?.easypaisa_account_name ?? '',
         bank_name: data?.bank_name ?? '',
+        bank_account_name: data?.bank_account_name ?? '',
         bank_account_no: data?.bank_account_no ?? '',
       },
       error: null,

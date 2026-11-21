@@ -119,14 +119,14 @@ export function StudentFeePanel({ studentId, studentName, admissionNumber = null
               <Receipt size={16} />
               <strong>How to pay</strong>
             </div>
-            {settings.easypaisa_account_no.trim() || settings.bank_account_no.trim() || settings.bank_name.trim() ? (
+            {settings.easypaisa_account_no.trim() || settings.bank_account_no.trim() || settings.bank_name.trim() || settings.bank_account_name.trim() ? (
               <>
                 {settings.easypaisa_account_no.trim() && (
                   <p>Easypaisa account no. <strong>{settings.easypaisa_account_no}</strong>{settings.easypaisa_account_name.trim() ? ` · ${settings.easypaisa_account_name}` : ''}</p>
                 )}
-                {(settings.bank_account_no.trim() || settings.bank_name.trim()) && (
+                {(settings.bank_account_no.trim() || settings.bank_name.trim() || settings.bank_account_name.trim()) && (
                   <p>
-                    {settings.bank_name.trim() ? `${settings.bank_name.trim()} ` : 'Bank '}account / IBAN no. <strong>{settings.bank_account_no.trim() || '—'}</strong>
+                    {settings.bank_name.trim() ? `${settings.bank_name.trim()} ` : 'Bank '}account / IBAN no. <strong>{settings.bank_account_no.trim() || '—'}</strong>{settings.bank_account_name.trim() ? ` · ${settings.bank_account_name}` : ''}
                   </p>
                 )}
               </>
