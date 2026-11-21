@@ -24,6 +24,7 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<string[]>([]);
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(async (next: SmsLogFilters) => {
     setLoading(true);
@@ -35,12 +36,27 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
 
   useEffect(() => { void load(filters); }, [filters, load]);
 
+  const dates = useMemo(
+    () => Array.from(new Set(entries.map((entry) => entry.attendance_date).filter((value): value is string => Boolean(value)))).sort().reverse(),
+    [entries],
+  );
+
+  const visible = useMemo(
+    () => (notice.trim()
+      ? entries.filter((entry) =>
+        entry.student_name.toLowerCase().includes(notice.trim().toLowerCase())
+        || (entry.parent_phone ?? '').includes(notice.trim())
+        || (entry.message_body ?? '').toLowerCase().includes(notice.trim().toLowerCase()))
+      : entries),
+    [entries, notice],
+  );
+
   const counts = useMemo(() => ({
-    total: entries.length,
-    sent: entries.filter((entry) => entry.status === 'sent').length,
-    pending: entries.filter((entry) => entry.status === 'pending').length,
-    failed: entries.filter((entry) => entry.status === 'failed').length,
-  }), [entries]);
+    total: visible.length,
+    sent: visible.filter((entry) => entry.status === 'sent').length,
+    pending: visible.filter((entry) => entry.status === 'pending').length,
+    failed: visible.filter((entry) => entry.status === 'failed').length,
+  }), [visible]);
 
   const retry = async (entry: SmsLogEntry) => {
     setBusyIds((current) => [...current, entry.id]);
@@ -63,7 +79,10 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
               {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <button type="button" className="secondary-button" onClick={() => setFilters({ date: '', status: '' })}><RefreshCw size={15} /> Clear filters</button>
+          <label className="control-field">Search
+            <input value={notice} onChange={(event) => setNotice(event.target.value)} placeholder="Student, number or message" />
+          </label>
+          <button type="button" className="secondary-button" onClick={() => { setFilters({ date: '', status: '' }); setNotice(''); }}><RefreshCw size={15} /> Clear filters</button>
         </div>
         <div className="sms-report-summary">
           <span className="sms-chip total"><Send size={14} /> {counts.total} logged</span>
@@ -72,6 +91,18 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
           <span className="sms-chip failed"><XCircle size={14} /> {counts.failed} failed</span>
         </div>
       </div>
+
+      {dates.length > 0 && (
+        <div className="panel sms-day-strip">
+          <span className="sms-day-label">Jump to a date</span>
+          <button type="button" className={`sms-day ${filters.date === '' ? 'on' : ''}`} onClick={() => setFilters((current) => ({ ...current, date: '' }))}>All dates</button>
+          {dates.slice(0, 12).map((day) => (
+            <button key={day} type="button" className={`sms-day ${filters.date === day ? 'on' : ''}`} onClick={() => setFilters((current) => ({ ...current, date: day }))}>
+              {formatStamp(`${day}T00:00:00`)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="panel roster-panel">
         <div className="table-wrap">
@@ -89,7 +120,7 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry) => {
+              {visible.map((entry) => {
                 const meta = statusMeta[entry.status] ?? statusMeta.pending;
                 const StatusIcon = meta.icon;
                 return (
@@ -120,10 +151,12 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
           </table>
           {loading && <div className="empty-state large">Loading SMS report…</div>}
           {!loading && error && <div className="empty-state large">{error}</div>}
-          {!loading && !error && entries.length === 0 && (
+          {!loading && !error && visible.length === 0 && (
             <div className="empty-state large">
               <CalendarDays size={20} />
-              No SMS alerts logged for these filters yet. Send absentee alerts from the Daily Attendance tab and they will appear here.
+              {entries.length === 0
+                ? 'No SMS alerts logged for these filters yet. Send absentee alerts from the Daily Attendance tab and they will appear here.'
+                : 'No alert matches that search.'}
             </div>
           )}
         </div>

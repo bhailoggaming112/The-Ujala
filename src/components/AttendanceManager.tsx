@@ -7,22 +7,19 @@ import { supabase } from '@/lib/supabase';
 import type { Student } from '@/lib/schoolTypes';
 import { StudentPhoto } from '@/components/StudentPhoto';
 import { SmsReport } from '@/components/SmsReport';
+import { AbsenteeAlertsPanel } from '@/components/AbsenteeAlertsPanel';
 import { DmcSheet } from '@/components/DmcSheet';
 import { DailyOverviewPanel, MonthlyReportPanel, type ClassSubmission } from '@/components/AttendanceOverviewPanels';
 import { SchoolCalendarSettings } from '@/components/SchoolCalendarSettings';
 import { createDmcDraft, createMarksRows, type DmcDraft, type DmcMarksRow } from '@/lib/dmc';
-import { SCHOOL_NAME, SCHOOL_NAME_UR, renderNoticeText } from '@/lib/noticeText';
-import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
 import { loadSchoolCalendar, removeCalendarDay, saveCalendarDay, saveCalendarPolicy } from '@/lib/schoolCalendar';
 import { useAuth } from '@/lib/auth';
 import {
   DEFAULT_CALENDAR_POLICY, attendancePercentage, countByStatus, formatPercentage, monthStart, summariseAttendance, todayKey,
   type AttendanceRecord, type AttendanceStatus, type AttendanceSummary, type CalendarDay, type CalendarDayType, type CalendarPolicy,
 } from '@/lib/attendance';
-
 type SectionKey = { class_name: string; section_name: string };
 type Tab = 'register' | 'calendar' | 'monthly' | 'dmc' | 'sms';
-type Language = 'English' | 'Urdu';
 
 const classOptions = ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10'];
 
@@ -32,14 +29,6 @@ const statusMeta: { value: AttendanceStatus; label: string }[] = [
   { value: 'late', label: 'Late' },
   { value: 'leave', label: 'Leave' },
 ];
-
-// Used when the school has not saved its own absentee wording yet.
-const DEFAULT_ABSENTEE_TEMPLATE: Record<Language, string> = {
-  English: `Dear Parent or Guardian, {{student_name}} was marked absent at {{school_name}}. Please inform the school office if this was not expected.`,
-  Urdu: `محترم والدین، {{student_name}} آج {{school_name}} میں غیر حاضر رہے۔ اگر یہ غیر متوقع تھا تو براہِ کرم اسکول دفتر کو اطلاع دیں۔`,
-};
-
-const absenteeHeading = (language: Language) => language === 'Urdu' ? SCHOOL_NAME_UR : SCHOOL_NAME;
 
 const tabs: { value: Tab; label: string; icon: typeof CalendarCheck2 }[] = [
   { value: 'register', label: 'Daily Attendance', icon: CalendarCheck2 },
@@ -82,10 +71,6 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<'save' | 'delete' | null>(null);
 
-  const [smsLanguage, setSmsLanguage] = useState<Language>('English');
-  const [sendingSms, setSendingSms] = useState(false);
-  const [alertedIds, setAlertedIds] = useState<string[]>([]);
-
   const [policy, setPolicy] = useState<CalendarPolicy>(DEFAULT_CALENDAR_POLICY);
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [calendarError, setCalendarError] = useState<string | null>(null);
@@ -127,7 +112,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
     }
   }, []);
 
-  useEffect(() => { setDraft({}); setAlertedIds([]); void loadAttendance(date); }, [date, loadAttendance]);
+  useEffect(() => { setDraft({}); void loadAttendance(date); }, [date, loadAttendance]);
 
   const isComplete = (key: SectionKey) => {
     const list = students.filter((s) => s.class_name === key.class_name && s.section_name === key.section_name);
@@ -334,49 +319,6 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
     onToast('School working schedule and calendar saved.');
   };
 
-  const loadTemplate = async (language: Language) => {
-    try {
-      const { data } = await supabase
-        .from('school_notice_templates')
-        .select('template_text')
-        .eq('notice_type', 'absentee_alert')
-        .eq('language', language)
-        .maybeSingle();
-      const text = (data as { template_text: string } | null)?.template_text;
-      return text?.trim() ? text : DEFAULT_ABSENTEE_TEMPLATE[language];
-    } catch {
-      return DEFAULT_ABSENTEE_TEMPLATE[language];
-    }
-  };
-
-  const sendAbsenteeAlerts = async () => {
-    if (absentees.length === 0) { onToast('No absentees to message for this date.'); return; }
-    setSendingSms(true);
-    const template = await loadTemplate(smsLanguage);
-    const messages = absentees.map((student) => ({
-      student_id: student.id,
-      student_name: student.full_name,
-      class_name: student.class_name,
-      section_name: student.section_name,
-      parent_phone: student.guardian_phone || student.messaging_number || student.father_contact_number || student.whatsapp_number || null,
-      message_type: 'absentee_alert',
-      message_body: renderNoticeText(template, smsLanguage, student.full_name),
-      attendance_date: date,
-    }));
-    const { ids, error } = await queueSmsMessages(messages);
-    if (error || ids.length === 0) {
-      setSendingSms(false);
-      onToast('The absentee alerts could not be logged. Please try again.');
-      return;
-    }
-    const statusError = await updateSmsStatus(ids, 'sent', `Logged from the Daily Attendance register for ${date}`);
-    setSendingSms(false);
-    setAlertedIds(absentees.map((student) => student.id));
-    onToast(statusError
-      ? `${ids.length} alerts logged, but their status could not be updated. Open the SMS Report to review.`
-      : `${ids.length} absentee alerts sent and recorded in the SMS Report.`);
-  };
-
   return (
     <div className="attendance-manager">
       <div className="att-tabs" role="tablist">
@@ -457,34 +399,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
             </div>
           </div>
 
-          <div className="panel attendance-sms-bar">
-            <div className="attendance-sms-copy">
-              <MessageCircle size={18} />
-              <div>
-                <strong>{absenteeHeading(smsLanguage)} · {absentees.length} absentee{absentees.length === 1 ? '' : 's'} on {new Date(`${date}T00:00:00`).toLocaleDateString()}</strong>
-                <small>
-                  {absentees.length === 0
-                    ? 'Nobody is marked absent in this section yet.'
-                    : `Alert the guardians of ${absentees.map((student) => student.full_name).slice(0, 3).join(', ')}${absentees.length > 3 ? ` and ${absentees.length - 3} more` : ''}.`}
-                </small>
-              </div>
-            </div>
-            <div className="attendance-sms-actions">
-              <div className="segmented-control compact lang-toggle">
-                {(['English', 'Urdu'] as const).map((lang) => (
-                  <button key={lang} type="button" className={smsLanguage === lang ? 'selected' : ''} onClick={() => setSmsLanguage(lang)}>{lang}</button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => void sendAbsenteeAlerts()}
-                disabled={sendingSms || absentees.length === 0}
-              >
-                <MessageCircle size={16} /> {sendingSms ? 'Sending…' : 'Send Absentee SMS'}
-              </button>
-            </div>
-          </div>
+          <AbsenteeAlertsPanel forDate={date} absentees={absentees} onToast={onToast} />
 
           <div className="panel roster-panel section-students-panel">
             <div className="att-roster-head">
@@ -561,7 +476,6 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
                       <td className="muted-cell">{student.admission_number}</td>
                       <td>
                         <strong>{student.full_name}</strong>
-                        {alertedIds.includes(student.id) && <span className="sms-sent-tag"><Check size={11} /> SMS sent</span>}
                       </td>
                       <td><span>{student.fathers_name || student.guardian_name}</span><small>{student.fathers_name ? student.guardian_name : ''}</small></td>
                       <td>{student.area || '—'}</td>

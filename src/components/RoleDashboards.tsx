@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { CalendarCheck2, FileBadge2, GraduationCap, Users } from 'lucide-react';
+import { Bell, CalendarCheck2, FileBadge2, GraduationCap, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import type { Student } from '@/lib/schoolTypes';
+import { fetchPortalNotifications } from '@/lib/absenteeAlerts';
+import type { PortalNotification, Student } from '@/lib/schoolTypes';
 
 export function ParentDashboard() {
   const { profile } = useAuth();
   const [children, setChildren] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<Record<string, { present: number; absent: number; late: number }>>({});
+  const [notifications, setNotifications] = useState<PortalNotification[]>([]);
+  const [noticeError, setNoticeError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,9 +41,15 @@ export function ParentDashboard() {
         if (row.status in map[row.student_id]) (map[row.student_id] as Record<string, number>)[row.status]++;
       }
       setAttendance(map);
+
+      const notices = await fetchPortalNotifications(studentIds);
+      setNotifications(notices.notifications);
+      setNoticeError(notices.error);
       setLoading(false);
     })();
   }, [profile]);
+
+  const childName = (studentId: string) => children.find((child) => child.id === studentId)?.full_name ?? 'your child';
 
   if (loading) return <div className="page"><p className="empty-state large">Loading your children's records…</p></div>;
 
@@ -71,6 +80,37 @@ export function ParentDashboard() {
           <p>Here's how your children are doing at school.</p>
         </div>
       </div>
+
+      <section className="panel parent-notices-panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">Absence notifications</span>
+            <h2>Notices from the school</h2>
+            <p className="panel-subtitle">An absence notice appears here as soon as the school records your child as absent.</p>
+          </div>
+          <Bell size={20} />
+        </div>
+        {noticeError && <p className="dmc-warning">{noticeError}</p>}
+        {notifications.length === 0 ? (
+          <p className="empty-state">No notices yet. When your child is marked absent, the details will appear here.</p>
+        ) : (
+          <ul className="parent-notice-list">
+            {notifications.map((notice) => (
+              <li className="parent-notice" key={notice.id}>
+                <span className="parent-notice-icon"><Bell size={15} /></span>
+                <div>
+                  <div className="parent-notice-top">
+                    <strong>{notice.title}</strong>
+                    <small>{new Date(notice.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</small>
+                  </div>
+                  <span className="parent-notice-child">{childName(notice.student_id)}</span>
+                  <p>{notice.body}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="parent-children-grid">
         {children.map((child) => {

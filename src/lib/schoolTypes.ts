@@ -139,6 +139,41 @@ export type NoticeTemplate = {
   updated_at?: string;
 };
 
+export type AbsenteeTemplate = {
+  id?: string;
+  notice_type: 'absentee_alert';
+  language: 'English' | 'Urdu';
+  template_text: string;
+  updated_at?: string;
+};
+
+export type AbsenteeQueueStatus = 'queued' | 'sent';
+
+export type AbsenteeQueueEntry = {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class_name: string | null;
+  section_name: string | null;
+  parent_phone: string | null;
+  attendance_date: string;
+  language: 'English' | 'Urdu';
+  message_body: string | null;
+  status: AbsenteeQueueStatus;
+  sent_at: string | null;
+  created_at: string;
+};
+
+export type PortalNotification = {
+  id: string;
+  student_id: string;
+  notification_type: string;
+  title: string;
+  body: string;
+  attendance_date: string | null;
+  created_at: string;
+};
+
 export type InformationRecord = {
   id: string;
   information_type: string;
