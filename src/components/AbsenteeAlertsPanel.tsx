@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCheck, Clock, Loader2, MessageCircle, RefreshCw, Save, Send, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, CheckCheck, Clock, ExternalLink, Loader2, MessageCircle, Paperclip, RefreshCw, Save, Send, Trash2, Upload, Users, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { AbsenteeQueueEntry, AbsenteeTemplate } from '@/lib/schoolTypes';
 import { renderAbsenteeText, SCHOOL_NAME, SCHOOL_NAME_UR } from '@/lib/noticeText';
@@ -10,6 +10,7 @@ import {
   fetchAbsentStudentsForDate, markAbsenteesSent, removeAbsentees, saveAbsenteeLanguage,
   saveAbsenteeTemplate, syncAbsentees,
 } from '@/lib/absenteeAlerts';
+import { ATTACHMENT_ACCEPT, messageWithAttachment, uploadAbsenteeAttachment, whatsappLink } from '@/lib/whatsapp';
 
 const DEFAULT_WORDING: Record<AbsenteeTemplate['language'], string> = {
   English: `Dear Parent or Guardian, {student_name} of {class} was marked absent on {date} at {school_name}. Please contact the school office if this was not expected.`,
@@ -47,6 +48,14 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const committedWording = useRef<Record<AbsenteeTemplate['language'], string>>({ ...DEFAULT_WORDING });
   const [wordingVersion, setWordingVersion] = useState(0);
   const [reloadToken, setReloadToken] = useState(0);
+  // One optional file for the whole batch: its link is appended to every message and
+  // carried onto the parent portal notice.
+  const [attachment, setAttachment] = useState<{ url: string; name: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  // Rows the browser refused to open in a new tab, kept so the office can click each
+  // one and still send it.
+  const [blocked, setBlocked] = useState<{ id: string; logId: string | null; student: string; phone: string; link: string }[]>([]);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   // Held in a ref so the count callback's changing identity cannot retrigger the
   // effect below on every render.
   const queueChanged = useRef(onQueueChanged);
@@ -89,7 +98,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       }
 
       const result = await syncAbsentees(
-        buildAbsenteeEntries(language, committedWording.current[language], roster.students, forDate),
+        buildAbsenteeEntries(language, committedWording.current[language], roster.students, forDate, attachment),
         roster.students.map((student) => student.id),
         forDate,
       );
@@ -104,7 +113,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       setSyncing(false);
     })();
     return () => { cancelled = true; };
-  }, [templatesLoaded, forDate, language, wordingVersion, reloadToken]);
+  }, [templatesLoaded, forDate, language, wordingVersion, reloadToken, attachment]);
 
   const queuedRows = queue.filter((entry) => entry.status === 'queued');
   const toSend = queuedRows.filter((entry) => draftSelected.includes(entry.id));
@@ -117,12 +126,15 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   useEffect(() => { queueChanged.current?.(); }, [queuedRows.length]);
 
   const preview = previewEntry
-    ? renderAbsenteeText(wording[language], {
-      student_name: previewEntry.student_name,
-      class_name: previewEntry.class_name ?? '',
-      section_name: previewEntry.section_name ?? '',
-      date: forDate,
-    })
+    ? messageWithAttachment(
+      renderAbsenteeText(wording[language], {
+        student_name: previewEntry.student_name,
+        class_name: previewEntry.class_name ?? '',
+        section_name: previewEntry.section_name ?? '',
+        date: forDate,
+      }),
+      previewEntry.attachment_url ?? attachment?.url ?? null,
+    )
     : '';
 
   const pickLanguage = (next: AbsenteeTemplate['language']) => {
@@ -169,23 +181,47 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const lowPause = Math.min(minPause, maxPause);
   const highPause = Math.max(minPause, maxPause);
 
-  // Sending one at a time with a random pause between messages keeps the school
-  // number from being flagged for bulk messaging.
+  const pickAttachment = async (file: File | null) => {
+    if (!file) return;
+    setUploading(true);
+    const result = await uploadAbsenteeAttachment(file);
+    setUploading(false);
+    if (result.error) { onToast(result.error); return; }
+    setAttachment({ url: result.url, name: result.name });
+    onToast(`${result.name} attached. Its link is added to every alert and to the parent portal notice.`);
+  };
+
+  const clearAttachment = () => {
+    setAttachment(null);
+    if (fileInput.current) fileInput.current.value = '';
+    onToast('Attachment removed. Alerts will go out as text only.');
+  };
+
+  // Each alert opens its own WhatsApp tab with the message pre-filled. The pause
+  // between sends keeps the school number from being flagged for bulk messaging.
   const sendSelected = async () => {
     if (toSend.length === 0) { onToast('Tick the students you want to message first.'); return; }
     cancelSend.current = false;
     setSending(true);
     setSendProgress({ done: 0, total: toSend.length });
+    setBlocked([]);
 
-    const log = await queueSmsMessages(toSend.map((entry) => ({
+    const outgoing = toSend.map((entry) => ({
+      entry,
+      message: messageWithAttachment(entry.message_body ?? '', entry.attachment_url ?? attachment?.url ?? null),
+    }));
+
+    const log = await queueSmsMessages(toSend.map((entry, index) => ({
       student_id: entry.student_id,
       student_name: entry.student_name,
       class_name: entry.class_name,
       section_name: entry.section_name,
       parent_phone: entry.parent_phone,
       message_type: 'absentee_alert',
-      message_body: entry.message_body ?? '',
+      message_body: outgoing[index].message,
       attendance_date: entry.attendance_date,
+      attachment_url: entry.attachment_url ?? attachment?.url ?? null,
+      attachment_name: entry.attachment_name ?? attachment?.name ?? null,
     })));
     if (log.error) {
       setSending(false);
@@ -195,37 +231,66 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     }
 
     const sentIds: string[] = [];
-    for (let index = 0; index < toSend.length; index += 1) {
+    const sentLogIds: string[] = [];
+    const blockedRows: typeof blocked = [];
+    for (let index = 0; index < outgoing.length; index += 1) {
       if (cancelSend.current) break;
-      const entry = toSend[index];
       if (index > 0) {
         const delay = lowPause + Math.random() * (highPause - lowPause);
         await wait(delay * 1000);
       }
       if (cancelSend.current) break;
-      sentIds.push(entry.id);
-      setSendProgress({ done: index + 1, total: toSend.length });
+      const { entry, message } = outgoing[index];
+      const link = whatsappLink(entry.parent_phone, message);
+      const opened = window.open(link, '_blank', 'noopener,noreferrer');
+      if (opened) {
+        sentIds.push(entry.id);
+        sentLogIds.push(log.ids[index]);
+      } else {
+        blockedRows.push({ id: entry.id, logId: log.ids[index] ?? null, student: entry.student_name, phone: entry.parent_phone ?? '', link });
+      }
+      setSendProgress({ done: index + 1, total: outgoing.length });
     }
 
-    const logIds = log.ids.slice(0, sentIds.length);
-    if (sentIds.length > 0) {
-      const statusError = await updateSmsStatus(logIds, 'sent', `Sent from the absentee list for ${forDate}`);
+    if (sentLogIds.length > 0) {
+      const statusError = await updateSmsStatus(sentLogIds, 'sent', `WhatsApp opened for ${forDate}`);
       const queueErrorResult = await markAbsenteesSent(sentIds);
       if (statusError || queueErrorResult) {
-        onToast(`${sentIds.length} alerts were sent, but recording them failed. Open the SMS Report to review.`);
-      } else {
-        onToast(`${sentIds.length} absentee alert${sentIds.length === 1 ? '' : 's'} sent and recorded in the SMS Report.`);
+        onToast(`${sentIds.length} WhatsApp chats were opened, but recording them failed. Open the WhatsApp SMS Report to review.`);
       }
-      const reloaded = await fetchAbsenteeQueue(forDate);
-      if (!reloaded.error) setQueue(reloaded.entries);
-      setDraftSelected((current) => current.filter((id) => !sentIds.includes(id)));
-      refresh();
+    }
+
+    if (blockedRows.length > 0) {
+      setBlocked(blockedRows);
+      onToast(`${blockedRows.length} chat${blockedRows.length === 1 ? '' : 's'} could not open because your browser blocked new tabs. Use the links below to send them.`);
+    } else if (sentIds.length > 0) {
+      onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened and recorded in the WhatsApp SMS Report.`);
     } else {
       await supabase.from('school_sms_log').delete().in('id', log.ids);
       onToast('Sending stopped. Nothing was sent.');
     }
+
+    if (sentIds.length > 0) {
+      const reloaded = await fetchAbsenteeQueue(forDate);
+      if (!reloaded.error) setQueue(reloaded.entries);
+      setDraftSelected((current) => current.filter((id) => !sentIds.includes(id)));
+      refresh();
+    }
     setSending(false);
     setSendProgress(null);
+  };
+
+  // A chat the browser blocked is marked sent once the office confirms it was opened
+  // from the fallback link.
+  const confirmBlockedSent = async (row: typeof blocked[number]) => {
+    if (row.logId) await updateSmsStatus([row.logId], 'sent', `Sent from a fallback link for ${forDate}`);
+    await markAbsenteesSent([row.id]);
+    setBlocked((current) => current.filter((item) => item.id !== row.id));
+    const reloaded = await fetchAbsenteeQueue(forDate);
+    if (!reloaded.error) setQueue(reloaded.entries);
+    setDraftSelected((current) => current.filter((id) => id !== row.id));
+    onToast(`Recorded the alert to ${row.student} as sent.`);
+    refresh();
   };
 
   const schoolHeading = language === 'Urdu' ? SCHOOL_NAME_UR : SCHOOL_NAME;
@@ -235,7 +300,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       <div className="panel absentee-toolbar">
         <div className="absentee-toolbar-head">
           <div>
-            <span className="eyebrow">Send absentee SMS</span>
+            <span className="eyebrow">Send absentee WhatsApp SMS</span>
             <h2>{schoolHeading} · {queuedRows.length} alert{queuedRows.length === 1 ? '' : 's'} waiting to send</h2>
             <p className="panel-subtitle">
               Every absence saved in the Daily Attendance register lands here on its own, and an absence notice appears in the parent portal straight away.
@@ -255,6 +320,35 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       </div>
 
       {queueError && <p className="dmc-warning">{queueError}</p>}
+
+      <div className="panel absentee-attachment">
+        <div className="absentee-attachment-head">
+          <span className="absentee-attachment-icon"><Paperclip size={16} /></span>
+          <div>
+            <strong>Optional attachment</strong>
+            <small>JPEG, PNG, PDF or Word document, up to 10 MB. Its link is added to every alert and to the parent portal notice.</small>
+          </div>
+        </div>
+        <div className="absentee-attachment-body">
+          <input
+            ref={fileInput}
+            type="file"
+            accept={ATTACHMENT_ACCEPT}
+            className="absentee-file-input"
+            onChange={(event) => void pickAttachment(event.target.files?.[0] ?? null)}
+          />
+          <button type="button" className="secondary-button" onClick={() => fileInput.current?.click()} disabled={uploading || sending}>
+            <Upload size={15} /> {uploading ? 'Uploading…' : attachment ? 'Replace file' : 'Choose file'}
+          </button>
+          {attachment && (
+            <span className="absentee-attachment-chip">
+              <Paperclip size={13} /> {attachment.name}
+              <a href={attachment.url} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Open</a>
+              <button type="button" onClick={clearAttachment} aria-label="Remove attachment" disabled={sending}><X size={13} /></button>
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="panel absentee-template">
         <div className="absentee-template-head">
@@ -352,7 +446,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       </div>
 
       <div className="table-wrap">
-        <table className="min-w-[900px]">
+        <table className="min-w-[1040px]">
           <thead>
             <tr>
               <th className="absentee-check">
@@ -370,6 +464,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
               <th>Parent number</th>
               <th>Language</th>
               <th>Message</th>
+              <th>Attachment</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -395,6 +490,11 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
                   dir={entry.language === 'Urdu' ? 'rtl' : 'ltr'}
                 >
                   {entry.message_body || '—'}
+                </td>
+                <td>
+                  {entry.attachment_url
+                    ? <a className="sms-attachment" href={entry.attachment_url} target="_blank" rel="noreferrer"><Paperclip size={12} /> {entry.attachment_name || 'File'}</a>
+                    : <span className="muted-cell">—</span>}
                 </td>
                 <td>
                   <span className={`absentee-status ${entry.status}`}>
@@ -425,14 +525,35 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
               Stop after this one
             </button>
           )}
-          <button type="button" className="primary-button" onClick={() => void sendSelected()} disabled={sending || toSend.length === 0}>
+          <button type="button" className="primary-button" onClick={() => void sendSelected()} disabled={sending || uploading || toSend.length === 0}>
             <Send size={16} />
             {sending && sendProgress
-              ? `Sending ${sendProgress.done}/${sendProgress.total}…`
+              ? `Opening ${sendProgress.done}/${sendProgress.total}…`
               : 'Send selected alerts'}
           </button>
         </div>
       </div>
+
+      {blocked.length > 0 && (
+        <div className="absentee-blocked">
+          <div className="absentee-blocked-head">
+            <AlertTriangle size={16} />
+            <div>
+              <strong>{blocked.length} chat{blocked.length === 1 ? '' : 's'} were blocked by your browser</strong>
+              <small>Click each link to open WhatsApp with the message ready, then mark it as sent.</small>
+            </div>
+          </div>
+          <ul>
+            {blocked.map((row) => (
+              <li key={row.id}>
+                <span><strong>{row.student}</strong><small>{row.phone || 'No number saved'}</small></span>
+                <a className="secondary-button" href={row.link} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open WhatsApp</a>
+                <button type="button" className="ghost-button" onClick={() => void confirmBlockedSent(row)}><CheckCheck size={14} /> Mark as sent</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       </div>
     </div>
   );

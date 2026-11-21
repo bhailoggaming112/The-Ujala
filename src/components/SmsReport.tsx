@@ -114,6 +114,7 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
                 <th>Attendance date</th>
                 <th>Parent number</th>
                 <th>Message type</th>
+                <th>Attachment</th>
                 <th>Status</th>
                 <th>Timestamp</th>
                 <th />
@@ -130,6 +131,11 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
                     <td className="muted-cell">{entry.attendance_date ? formatStamp(`${entry.attendance_date}T00:00:00`) : '—'}</td>
                     <td>{entry.parent_phone || '—'}</td>
                     <td><span className="sms-type">{entry.message_type.replace(/_/g, ' ')}</span></td>
+                    <td>
+                      {entry.attachment_url
+                        ? <a className="sms-attachment" href={entry.attachment_url} target="_blank" rel="noreferrer">{entry.attachment_name || 'Attachment'}</a>
+                        : <span className="muted-cell">—</span>}
+                    </td>
                     <td><span className={`sms-status ${entry.status}`}><StatusIcon size={14} /> {meta.label}</span></td>
                     <td className="muted-cell">{formatStamp(entry.sent_at ?? entry.created_at)}</td>
                     <td>
@@ -149,13 +155,13 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
               })}
             </tbody>
           </table>
-          {loading && <div className="empty-state large">Loading SMS report…</div>}
+          {loading && <div className="empty-state large">Loading WhatsApp SMS report…</div>}
           {!loading && error && <div className="empty-state large">{error}</div>}
           {!loading && !error && visible.length === 0 && (
             <div className="empty-state large">
               <CalendarDays size={20} />
               {entries.length === 0
-                ? 'No SMS alerts logged for these filters yet. Send absentee alerts from the Daily Attendance tab and they will appear here.'
+                ? 'No WhatsApp alerts logged for these filters yet. Send absentee alerts from the Send Absentee WhatsApp SMS view and they will appear here.'
                 : 'No alert matches that search.'}
             </div>
           )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, CalendarCheck2, FileBadge2, GraduationCap, Users } from 'lucide-react';
+import { Bell, CalendarCheck2, FileBadge2, GraduationCap, Paperclip, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { fetchPortalNotifications } from '@/lib/absenteeAlerts';
@@ -105,6 +105,11 @@ export function ParentDashboard() {
                   </div>
                   <span className="parent-notice-child">{childName(notice.student_id)}</span>
                   <p>{notice.body}</p>
+                  {notice.attachment_url && (
+                    <a className="parent-notice-attachment" href={notice.attachment_url} target="_blank" rel="noreferrer">
+                      <Paperclip size={13} /> View the document attached to this notice
+                    </a>
+                  )}
                 </div>
               </li>
             ))}

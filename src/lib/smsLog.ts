@@ -12,10 +12,12 @@ export type NewSmsLogEntry = {
   message_type: string;
   message_body: string;
   attendance_date: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
 };
 
 const SMS_LOG_COLUMNS =
-  'id, student_id, student_name, class_name, section_name, parent_phone, message_type, message_body, status, provider_response, attendance_date, sent_at, created_at';
+  'id, student_id, student_name, class_name, section_name, parent_phone, message_type, message_body, status, provider_response, attendance_date, sent_at, created_at, attachment_url, attachment_name';
 
 export type SmsLogFilters = { date: string; status: SmsLogStatus | '' };
 
@@ -28,7 +30,7 @@ export async function fetchSmsLog(filters: SmsLogFilters): Promise<{ entries: Sm
     if (error) return { entries: [], error: error.message };
     return { entries: (data ?? []) as SmsLogEntry[], error: null };
   } catch {
-    return { entries: [], error: 'The SMS report could not be loaded. Check your connection and try again.' };
+    return { entries: [], error: 'The WhatsApp SMS report could not be loaded. Check your connection and try again.' };
   }
 }
 

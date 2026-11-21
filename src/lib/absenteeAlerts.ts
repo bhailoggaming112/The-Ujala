@@ -3,7 +3,7 @@ import type { AbsenteeQueueEntry, AbsenteeTemplate, PortalNotification, Student 
 import { renderAbsenteeText } from '@/lib/noticeText';
 
 const QUEUE_COLUMNS =
-  'id, student_id, student_name, class_name, section_name, parent_phone, attendance_date, language, message_body, status, sent_at, created_at';
+  'id, student_id, student_name, class_name, section_name, parent_phone, attendance_date, language, message_body, status, sent_at, created_at, attachment_url, attachment_name';
 
 // The register only needs the handful of fields an alert uses, so the row is typed
 // narrowly instead of pretending it is a full student record.
@@ -21,6 +21,7 @@ export function buildAbsenteeEntries(
   templateText: string,
   roster: AbsentStudent[],
   forDate: string,
+  attachment?: { url: string; name: string } | null,
 ): NewAbsenteeEntry[] {
   return roster.map((student) => ({
     student_id: student.id,
@@ -36,6 +37,8 @@ export function buildAbsenteeEntries(
       section_name: student.section_name,
       date: forDate,
     }),
+    attachment_url: attachment?.url ?? null,
+    attachment_name: attachment?.name ?? null,
   }));
 }
 
@@ -91,6 +94,8 @@ export type NewAbsenteeEntry = {
   attendance_date: string;
   language: AbsenteeTemplate['language'];
   message_body: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
 };
 
 export async function fetchAbsenteeQueue(forDate: string): Promise<{ entries: AbsenteeQueueEntry[]; error: string | null }> {

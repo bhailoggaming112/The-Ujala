@@ -112,6 +112,8 @@ export type SmsLogEntry = {
   attendance_date: string | null;
   sent_at: string | null;
   created_at: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
 };
 
 export type DmcRecord = {
@@ -162,6 +164,8 @@ export type AbsenteeQueueEntry = {
   status: AbsenteeQueueStatus;
   sent_at: string | null;
   created_at: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
 };
 
 export type PortalNotification = {
@@ -172,6 +176,7 @@ export type PortalNotification = {
   body: string;
   attendance_date: string | null;
   created_at: string;
+  attachment_url: string | null;
 };
 
 export type InformationRecord = {

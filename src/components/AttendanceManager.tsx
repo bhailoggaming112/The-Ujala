@@ -35,7 +35,7 @@ const tabs: { value: Tab; label: string; icon: typeof CalendarCheck2 }[] = [
   { value: 'calendar', label: 'Calendar & Policy', icon: CalendarDays },
   { value: 'monthly', label: 'Monthly Report', icon: Filter },
   { value: 'dmc', label: 'DMC', icon: FileBadge2 },
-  { value: 'sms', label: 'SMS Report', icon: MessageCircle },
+  { value: 'sms', label: 'WhatsApp SMS Report', icon: MessageCircle },
 ];
 
 const parseCount = (value: string) => {
