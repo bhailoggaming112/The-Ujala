@@ -1832,3 +1832,45 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 @media (max-width: 720px) {
   .student-fee-summary { grid-template-columns: 1fr; }
 }
+
+/* ---- Accountant workspace ---------------------------------------------------- */
+.accountant-page .module-heading { margin-bottom: 22px; }
+.acct-quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; }
+.acct-action { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 18px 18px 20px; border-radius: 16px; border: 1px solid #e9f0f3; background: #ffffff; text-align: left; box-shadow: 0 6px 18px #38718a12; transition: transform .18s ease, box-shadow .18s ease; }
+.acct-action:hover { transform: translateY(-3px); box-shadow: 0 14px 28px #38718a1f; }
+.acct-action strong { font: 700 14.5px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; }
+.acct-action span { font-size: 11.5px; color: #8598a4; }
+.acct-action svg { border-radius: 12px; padding: 9px; width: 40px; height: 40px; }
+.acct-action.mint svg { background: #e9f6ef; color: #2f7d57; }
+.acct-action.sky svg { background: #eaf4fb; color: #2f6d86; }
+.acct-action.sun svg { background: #fff6db; color: #8f6416; }
+.acct-action.coral svg { background: #fff1ee; color: #a8483a; }
+
+.acct-mini-stats { display: flex; flex-wrap: wrap; gap: 10px 26px; padding: 14px 2px 2px; }
+.acct-mini-stats > div { display: flex; flex-direction: column; gap: 3px; }
+.acct-mini-stats span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: #93a5af; font-weight: 700; }
+.acct-mini-stats strong { font: 800 18px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
+
+.acct-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.acct-due-list { list-style: none; margin: 0; padding: 4px 0; display: flex; flex-direction: column; }
+.acct-due-list li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 2px; border-top: 1px solid #edf2f4; }
+.acct-due-list li:first-child { border-top: 0; }
+.acct-due-list strong { display: block; font-size: 13px; color: #3f5767; }
+.acct-due-list span { font-size: 11px; color: #93a5af; }
+.acct-due-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.acct-due-right b { font-size: 13px; color: #a8483a; font-variant-numeric: tabular-nums; }
+
+.fee-row-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.fee-link.danger { color: #b1454f; }
+.fee-link.danger:hover { background: #fdeef0; }
+.acct-total-row td { background: #fbfcfd; font-weight: 700; color: #2e4759; }
+.acct-void-row td { opacity: .62; }
+.acct-void-row .fee-mono { text-decoration: line-through; }
+.acct-ledger-modal { max-width: 820px; width: min(820px, 94vw); }
+.acct-reminder-preview { margin-top: 12px; padding: 14px; border-radius: 12px; background: #f6f9fa; border: 1px solid #e7eef1; font: 12px/1.6 'DM Sans', sans-serif; color: #526b7b; white-space: pre-wrap; }
+.fee-void-warning { display: flex; gap: 9px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fff4f1; color: #a8483a; font-size: 12px; }
+.fee-void-warning svg { flex: 0 0 auto; margin-top: 1px; }
+
+@media print {
+  .accountant-page .module-heading, .fee-tabs, .fee-quick, .fee-alert { display: none !important; }
+}

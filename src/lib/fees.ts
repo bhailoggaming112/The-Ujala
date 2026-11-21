@@ -99,6 +99,9 @@ export type FeePayment = {
   challan_id: string | null;
   challan_number: string | null;
   source: string;
+  voided: boolean;
+  voided_at: string | null;
+  void_reason: string | null;
   student_name: string;
   class_name: string | null;
   section_name: string | null;
@@ -272,7 +275,7 @@ export async function saveFeeStructure(values: FeeStructure): Promise<string | n
 }
 
 const PAYMENT_COLUMNS =
-  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, challan_id, challan_number, source, student:school_students(full_name, class_name, section_name, admission_number)';
+  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, challan_id, challan_number, source, voided, voided_at, void_reason, student:school_students(full_name, class_name, section_name, admission_number)';
 
 type PaymentRow = Omit<FeePayment, 'student_name' | 'class_name' | 'section_name' | 'admission_number'> & {
   student: { full_name: string; class_name: string | null; section_name: string | null; admission_number: string | null } | null;
@@ -280,6 +283,9 @@ type PaymentRow = Omit<FeePayment, 'student_name' | 'class_name' | 'section_name
 
 const toPayment = (row: PaymentRow): FeePayment => ({
   ...row,
+  voided: row.voided ?? false,
+  voided_at: row.voided_at ?? null,
+  void_reason: row.void_reason ?? null,
   student_name: row.student?.full_name ?? 'Unknown student',
   class_name: row.student?.class_name ?? null,
   section_name: row.student?.section_name ?? null,
@@ -341,6 +347,29 @@ export async function recordFeePayment(input: {
     };
   } catch {
     return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: 'The payment could not be recorded. Check your connection and try again.' };
+  }
+}
+
+// A payment is never deleted: the accountant reverses it with a reason, and the
+// database marks the row void, restores the balance the receipt had removed and
+// writes a ledger entry so the audit trail stays complete. A receipt taken against
+// an already cleared account removed nothing, so reversing it restores nothing.
+export async function voidFeePayment(paymentId: string, reason: string): Promise<{ restored: number; notRestored: number; balanceAfter: number; error: string | null }> {
+  try {
+    const { data, error } = await supabase.rpc('void_fee_payment', { p_payment_id: paymentId, p_reason: reason });
+    if (error) {
+      if (error.code === 'P0001' && error.message) return { restored: 0, notRestored: 0, balanceAfter: 0, error: error.message };
+      return { restored: 0, notRestored: 0, balanceAfter: 0, error: 'The payment could not be reversed. Please try again.' };
+    }
+    const row = data as { restored?: number; not_restored?: number; balance_after?: number } | null;
+    return {
+      restored: Number(row?.restored ?? 0),
+      notRestored: Number(row?.not_restored ?? 0),
+      balanceAfter: Number(row?.balance_after ?? 0),
+      error: null,
+    };
+  } catch {
+    return { restored: 0, notRestored: 0, balanceAfter: 0, error: 'The payment could not be reversed. Check your connection and try again.' };
   }
 }
 
@@ -463,23 +492,33 @@ export async function fetchChallansForStudent(studentId: string): Promise<{ chal
   }
 }
 
-// Money received on one day, across every class.
+// Money received on one day, across every class. A reversed payment is money the
+// school no longer holds, so it is left out of every collection figure.
 export function collectedOn(payments: FeePayment[], day: string): number {
   return payments
-    .filter((payment) => payment.payment_date === day)
+    .filter((payment) => payment.payment_date === day && !payment.voided)
     .reduce((total, payment) => total + Number(payment.amount), 0);
 }
 
 export function collectedInMonth(payments: FeePayment[], month: string): number {
   return payments
-    .filter((payment) => (payment.payment_date ?? '').slice(0, 7) === month)
+    .filter((payment) => (payment.payment_date ?? '').slice(0, 7) === month && !payment.voided)
     .reduce((total, payment) => total + Number(payment.amount), 0);
+}
+
+// Payments for one day, newest first, split by how the money was received. Voided
+// rows are excluded so a reversed receipt never counts towards the day's takings.
+export function paymentsOn(payments: FeePayment[], day: string): FeePayment[] {
+  return payments
+    .filter((payment) => payment.payment_date === day && !payment.voided)
+    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
 }
 
 // Daily totals for the month, oldest first, for the reports table.
 export function dailyTotals(payments: FeePayment[], month: string) {
   const totals = new Map<string, { amount: number; count: number }>();
   for (const payment of payments) {
+    if (payment.voided) continue;
     const day = (payment.payment_date ?? '').slice(0, 10);
     if (day.slice(0, 7) !== month) continue;
     const current = totals.get(day) ?? { amount: 0, count: 0 };
@@ -493,6 +532,7 @@ export function dailyTotals(payments: FeePayment[], month: string) {
 export function methodTotals(payments: FeePayment[], month: string) {
   const totals = new Map<string, number>();
   for (const payment of payments) {
+    if (payment.voided) continue;
     if ((payment.payment_date ?? '').slice(0, 7) !== month) continue;
     totals.set(payment.method, (totals.get(payment.method) ?? 0) + Number(payment.amount));
   }

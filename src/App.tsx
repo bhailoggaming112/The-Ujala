@@ -22,6 +22,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  UserCircle2,
   UserPlus,
   Users,
   UserRoundX,
@@ -44,6 +45,7 @@ import { AttendanceManager } from '@/components/AttendanceManager';
 import { AbsenteeAlertsPanel } from '@/components/AbsenteeAlertsPanel';
 import { PromoteStudentsPanel } from '@/components/PromoteStudentsPanel';
 import { FeeManagementPanel } from '@/components/FeeManagementPanel';
+import { AccountantPortal, accountantNavItems, type AccountantView } from '@/components/AccountantPortal';
 import { fetchAbsenteeQueue } from '@/lib/absenteeAlerts';
 import { todayKey } from '@/lib/attendance';
 import { ParentDashboard, StudentDashboard, TeacherDashboard } from '@/components/RoleDashboards';
@@ -102,6 +104,7 @@ function AppInner() {
   const { profile, loading: authLoading, signOut } = useAuth();
   const { students, attendance, loading, error: dataError, refresh, addStudent: addStudentRecord } = useSchoolData();
   const [view, setView] = useState<View>('dashboard');
+  const [acctView, setAcctView] = useState<AccountantView>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState('');
   const [showProfile, setShowProfile] = useState(false);
@@ -109,7 +112,7 @@ function AppInner() {
   const [credentials, setCredentials] = useState<PortalCredentials[] | null>(null);
   const [waitingAlerts, setWaitingAlerts] = useState(0);
   const [alertCountToken, setAlertCountToken] = useState(0);
-  const canSendAlerts = profile?.role === 'admin' || ['teacher', 'office_assistant', 'accountant'].includes(profile?.role ?? '');
+  const canSendAlerts = profile?.role === 'admin' || ['teacher', 'office_assistant'].includes(profile?.role ?? '');
 
   // The sidebar badge shows how many absentee alerts are still waiting today.
   useEffect(() => {
@@ -172,6 +175,37 @@ function AppInner() {
     if (result.ok) navigate('students');
     return result;
   };
+
+  // The accountant has a dedicated workspace: its own menu, its own screens, and no
+  // self-service account editing. Every rule here is also enforced in the database.
+  if (profile.role === 'accountant') {
+    const acctTitle = accountantNavItems.find((item) => item.view === acctView)?.label ?? 'Dashboard';
+    return (
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand"><div className="brand-mark"><img src="/New_LOGO_Final.PNG" alt="SchoolDesk" /></div><span>School<span className="brand-accent">Desk</span></span></div>
+          <div className="school-switcher"><div className="school-avatar">{initials}</div><div><strong>{profile.full_name}</strong><span>{roleLabel} account</span></div></div>
+          <p className="nav-label">Accounts office</p>
+          <nav>
+            {accountantNavItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.view} className={`nav-button ${acctView === item.view ? 'active' : ''}`} onClick={() => setAcctView(item.view)}>
+                  <Icon size={18} /><span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="sidebar-footer"><button className="settings-link" onClick={() => void signOut()}><LogOut size={17} /> Logout</button></div>
+        </aside>
+        <main className="main-content">
+          <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{acctTitle}</strong></div><div className="topbar-actions"><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>{roleLabel} account</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{roleLabel} account</strong><span>{profile.full_name}</span><button onClick={() => { setShowProfile(false); setAcctView('profile'); }}><UserCircle2 size={14} /> My profile</button><button onClick={() => void signOut()}><LogOut size={14} /> Logout</button></div>}</div></div></header>
+          <AccountantPortal onToast={setToast} />
+          {toast && <div className="toast"><Check size={17} /> {toast}</div>}
+        </main>
+      </div>
+    );
+  }
 
   if (profile.role === 'parent' || profile.role === 'student') {
     const isParent = profile.role === 'parent';
