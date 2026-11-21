@@ -9,7 +9,7 @@ export const CLASS_OPTIONS = [
 export const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'bank', label: 'Bank' },
-  { value: 'online', label: 'Online' },
+  { value: 'online', label: 'Online / Easypaisa' },
 ] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]['value'];
@@ -42,12 +42,22 @@ export type FeeChallan = FeeHeads & {
   student_name: string;
   class_name: string | null;
   section_name: string | null;
+  challan_number: string | null;
   month: string;
   due_date: string;
   total: number;
   status: FeeChallanStatus;
   created_at: string;
 };
+
+// A challan together with the student's admission number, which is what the barcode
+// and the printed student section need.
+export type ChallanDocument = FeeChallan & { admission_number: string | null };
+
+// The value a challan barcode carries: the challan number once it has been saved, or
+// an admission-number-plus-month code for a challan that is still only a preview.
+export const challanScanCode = (challan: { challan_number?: string | null; admission_number?: string | null; month: string }) =>
+  (challan.challan_number ?? '').trim() || `${challan.admission_number ?? ''}+${challan.month}`;
 
 export type FeePayment = {
   id: string;
@@ -59,10 +69,45 @@ export type FeePayment = {
   remarks: string | null;
   balance_after: number;
   created_at: string;
+  challan_id: string | null;
+  challan_number: string | null;
+  source: string;
   student_name: string;
   class_name: string | null;
   section_name: string | null;
   admission_number: string | null;
+};
+
+// Where families may send the fee from home. One shared row for the whole school.
+export type PaymentSettings = {
+  easypaisa_account_no: string;
+  easypaisa_account_name: string;
+  bank_name: string;
+  bank_account_no: string;
+};
+
+export const EMPTY_PAYMENT_SETTINGS: PaymentSettings = {
+  easypaisa_account_no: '', easypaisa_account_name: '', bank_name: '', bank_account_no: '',
+};
+
+// What the scan box learns from a scanned challan.
+export type ScannedChallan = {
+  found: boolean;
+  reason?: string;
+  challan_id: string;
+  challan_number: string | null;
+  month: string;
+  due_date: string;
+  total: number;
+  status: FeeChallanStatus;
+  paid: number;
+  remaining: number;
+  student_id: string;
+  student_name: string;
+  admission_number: string | null;
+  class_name: string | null;
+  section_name: string | null;
+  fee_balance: number;
 };
 
 export type FeeSummary = {
@@ -198,7 +243,7 @@ export async function saveFeeStructure(values: FeeStructure): Promise<string | n
 }
 
 const PAYMENT_COLUMNS =
-  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, student:school_students(full_name, class_name, section_name, admission_number)';
+  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, challan_id, challan_number, source, student:school_students(full_name, class_name, section_name, admission_number)';
 
 type PaymentRow = Omit<FeePayment, 'student_name' | 'class_name' | 'section_name' | 'admission_number'> & {
   student: { full_name: string; class_name: string | null; section_name: string | null; admission_number: string | null } | null;
@@ -231,12 +276,14 @@ export async function fetchFeePayments(limit = 200): Promise<{ payments: FeePaym
 // student's balance are written together and cannot drift apart.
 export async function recordFeePayment(input: {
   studentId: string;
-  amount: number;
+  amount: number | null;
   method: PaymentMethod;
   paymentDate: string;
   remarks: string;
   receiptNumber: string;
-}): Promise<{ receiptNumber: string; balanceAfter: number; error: string | null }> {
+  challanNumber?: string;
+  source?: 'manual' | 'scan';
+}): Promise<{ receiptNumber: string; balanceAfter: number; challanStatus: string | null; error: string | null }> {
   try {
     const { data, error } = await supabase.rpc('record_fee_payment', {
       p_student_id: input.studentId,
@@ -245,22 +292,86 @@ export async function recordFeePayment(input: {
       p_payment_date: input.paymentDate,
       p_remarks: input.remarks,
       p_receipt_number: input.receiptNumber,
+      p_challan_number: input.challanNumber ?? null,
+      p_source: input.source ?? 'manual',
     });
     if (error) {
       // The database raises plain, readable reasons (a duplicate receipt number, for
       // example). Anything else is reported generically.
-      if (error.code === 'P0001' && error.message) return { receiptNumber: '', balanceAfter: 0, error: error.message };
-      return { receiptNumber: '', balanceAfter: 0, error: 'The payment could not be recorded. Please try again.' };
+      if (error.code === 'P0001' && error.message) {
+        return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: error.message };
+      }
+      return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: 'The payment could not be recorded. Please try again.' };
     }
-    const row = data as { receipt_number?: string; balance_after?: number } | null;
-    return { receiptNumber: row?.receipt_number ?? input.receiptNumber, balanceAfter: Number(row?.balance_after ?? 0), error: null };
+    const row = data as { receipt_number?: string; balance_after?: number; challan_status?: string | null } | null;
+    return {
+      receiptNumber: row?.receipt_number ?? input.receiptNumber,
+      balanceAfter: Number(row?.balance_after ?? 0),
+      challanStatus: row?.challan_status ?? null,
+      error: null,
+    };
   } catch {
-    return { receiptNumber: '', balanceAfter: 0, error: 'The payment could not be recorded. Check your connection and try again.' };
+    return { receiptNumber: '', balanceAfter: 0, challanStatus: null, error: 'The payment could not be recorded. Check your connection and try again.' };
+  }
+}
+
+export async function fetchPaymentSettings(): Promise<{ settings: PaymentSettings; error: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('school_payment_settings')
+      .select('easypaisa_account_no, easypaisa_account_name, bank_name, bank_account_no')
+      .eq('id', 1)
+      .maybeSingle();
+    if (error) return { settings: EMPTY_PAYMENT_SETTINGS, error: 'The payment details could not be loaded.' };
+    return {
+      settings: {
+        easypaisa_account_no: data?.easypaisa_account_no ?? '',
+        easypaisa_account_name: data?.easypaisa_account_name ?? '',
+        bank_name: data?.bank_name ?? '',
+        bank_account_no: data?.bank_account_no ?? '',
+      },
+      error: null,
+    };
+  } catch {
+    return { settings: EMPTY_PAYMENT_SETTINGS, error: 'The payment details could not be loaded. Check your connection and try again.' };
+  }
+}
+
+export async function savePaymentSettings(settings: PaymentSettings): Promise<string | null> {
+  try {
+    const { error } = await supabase
+      .from('school_payment_settings')
+      .update({ ...settings, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+    return error ? 'The payment details could not be saved. Please try again.' : null;
+  } catch {
+    return 'The payment details could not be saved. Check your connection and try again.';
+  }
+}
+
+// Reads a scanned challan code. The database decides what the code means, so the same
+// box accepts a challan number, an admission number, or an admission number plus month.
+export async function lookupFeeChallan(code: string): Promise<{ challan: ScannedChallan | null; error: string | null }> {
+  const trimmed = (code ?? '').trim();
+  if (!trimmed) return { challan: null, error: 'Scan or type a challan code first.' };
+  try {
+    const { data, error } = await supabase.rpc('lookup_fee_challan', { p_code: trimmed });
+    if (error) {
+      if (error.code === 'P0001' && error.message) return { challan: null, error: error.message };
+      return { challan: null, error: 'That challan could not be looked up. Please try again.' };
+    }
+    const row = data as ScannedChallan | null;
+    if (!row || row.found !== true) {
+      return { challan: null, error: row?.reason ?? 'No fee challan matches that code.' };
+    }
+    return { challan: row, error: null };
+  } catch {
+    return { challan: null, error: 'That challan could not be looked up. Check your connection and try again.' };
   }
 }
 
 export const CHALLAN_COLUMNS =
-  'id, student_id, student_name, class_name, section_name, month, due_date, tuition_fee, admission_misc, exam_lab, transport, arrears, concession, late_fine, total, status, created_at';
+  'id, student_id, student_name, class_name, section_name, challan_number, month, due_date, tuition_fee, admission_misc, exam_lab, transport, arrears, concession, late_fine, total, status, created_at';
 
 export async function fetchChallans(month: string): Promise<{ challans: FeeChallan[]; error: string | null }> {
   try {

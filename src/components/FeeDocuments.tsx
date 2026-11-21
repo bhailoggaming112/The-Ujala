@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Printer, X } from 'lucide-react';
+import { FeeBarcode } from '@/components/FeeBarcode';
 import { SCHOOL_NAME } from '@/lib/noticeText';
 import { usePrintSheet } from '@/lib/usePrintSheet';
 import type { Student } from '@/lib/schoolTypes';
 import {
-  HEAD_LABELS, formatDay, formatMoney, formatStamp,
-  type FeeChallan, type FeeHeads, type FeePayment, type FeeSummary,
+  EMPTY_PAYMENT_SETTINGS, HEAD_LABELS, challanScanCode, formatDay, formatMoney, formatStamp, monthLabel,
+  type ChallanDocument, type FeeHeads, type FeePayment, type FeeSummary, type PaymentSettings,
 } from '@/lib/fees';
 
 const headKeys: (keyof FeeHeads)[] = ['tuition_fee', 'admission_misc', 'exam_lab', 'transport', 'arrears', 'late_fine', 'concession'];
@@ -186,26 +187,37 @@ export function FeeReceiptView({ payment, student, summary, onClose }: {
   );
 }
 
-function ChallanSheet({ challan }: { challan: FeeChallan }) {
+function ChallanSheet({ challan, settings }: { challan: ChallanDocument; settings: PaymentSettings }) {
+  const copyLabel = 'Student Copy';
+  const scanCode = challanScanCode(challan);
+  const hasEasypaisa = Boolean(settings.easypaisa_account_no.trim());
+
   return (
     <section className="print-only print-challan">
       <div className="print-header">
         <SchoolMark />
         <div className="print-header-copy">
           <h1>{SCHOOL_NAME}</h1>
-          <p>Fee Challan · {challan.month}</p>
+          <p>Fee Challan · {monthLabel(challan.month)}</p>
+        </div>
+        <div className="print-header-copy challan-copy-label">
+          <span>{copyLabel}</span>
         </div>
         <div className="print-header-admitted">
           <span>Due date</span>
           <strong>{formatDay(challan.due_date)}</strong>
         </div>
       </div>
+
       <div className="print-columns">
         <div>
           <h2>Student Details</h2>
           <div className="print-row"><span className="print-row-label">Student</span><span className="print-row-value">{challan.student_name}</span></div>
+          <div className="print-row"><span className="print-row-label">Admission no.</span><span className="print-row-value">{challan.admission_number || '—'}</span></div>
           <div className="print-row"><span className="print-row-label">Class</span><span className="print-row-value">{challan.class_name ?? '—'} · Section {challan.section_name ?? '—'}</span></div>
-          <div className="print-row"><span className="print-row-label">Fee month</span><span className="print-row-value">{challan.month}</span></div>
+          <div className="print-row"><span className="print-row-label">Fee month</span><span className="print-row-value">{monthLabel(challan.month)}</span></div>
+          <div className="print-row"><span className="print-row-label">Challan no.</span><span className="print-row-value">{challan.challan_number || 'Generated on save'}</span></div>
+          <div className="print-row"><span className="print-row-label">Due date</span><span className="print-row-value">{formatDay(challan.due_date)}</span></div>
           <div className="print-row"><span className="print-row-label">Status</span><span className="print-row-value">{challan.status}</span></div>
         </div>
         <div>
@@ -219,6 +231,30 @@ function ChallanSheet({ challan }: { challan: FeeChallan }) {
           <div className="print-row total"><span className="print-row-label">Total payable</span><span className="print-row-value">{formatMoney(challan.total)}</span></div>
         </div>
       </div>
+
+      <div className="challan-pay-block">
+        <div className="challan-pay-copy">
+          <h2>How to Pay</h2>
+          {hasEasypaisa ? (
+            <>
+              <div className="print-row"><span className="print-row-label">Easypaisa account no.</span><span className="print-row-value">{settings.easypaisa_account_no}</span></div>
+              {settings.easypaisa_account_name.trim() && (
+                <div className="print-row"><span className="print-row-label">Account title</span><span className="print-row-value">{settings.easypaisa_account_name}</span></div>
+              )}
+            </>
+          ) : (
+            <p className="challan-pay-note">Pay at the school office counter during working hours.</p>
+          )}
+          {settings.bank_account_no.trim() && (
+            <div className="print-row"><span className="print-row-label">{settings.bank_name.trim() || 'Bank'} account no.</span><span className="print-row-value">{settings.bank_account_no}</span></div>
+          )}
+          <p className="challan-pay-note">Keep this Student Copy and bring it, or the barcode below, when depositing the fee.</p>
+        </div>
+        <div className="challan-barcode-block">
+          <FeeBarcode value={scanCode} caption={`Challan ${challan.challan_number || scanCode}`} />
+        </div>
+      </div>
+
       <div className="print-signatures">
         <div className="print-signature"><span>Depositor Signature</span></div>
         <div className="print-signature"><span>Authorised Signature</span></div>
@@ -227,17 +263,23 @@ function ChallanSheet({ challan }: { challan: FeeChallan }) {
   );
 }
 
-export function ChallanView({ challans, onClose }: { challans: FeeChallan[]; onClose: () => void }) {
+export function ChallanView({ challans, settings = EMPTY_PAYMENT_SETTINGS, onClose }: {
+  challans: ChallanDocument[];
+  settings?: PaymentSettings;
+  onClose: () => void;
+}) {
   const first = challans[0];
   const printSheet = usePrintSheet(challans.length > 0, (
     <>
       {challans.map((challan) => (
-        <ChallanSheet key={challan.id} challan={challan} />
+        <ChallanSheet key={challan.id} challan={challan} settings={settings} />
       ))}
     </>
   ));
 
   if (!first) return null;
+
+  const firstCode = challanScanCode(first);
 
   return (
     <div className="notice-overlay">
@@ -246,7 +288,7 @@ export function ChallanView({ challans, onClose }: { challans: FeeChallan[]; onC
           <div className="flex items-center gap-4">
             <img src="/New_LOGO_Final.PNG" alt={`${SCHOOL_NAME} logo`} className="h-14 w-14 object-contain" />
             <div>
-              <span className="eyebrow">Fee challan</span>
+              <span className="eyebrow">Fee challan · Student Copy</span>
               <h2 className="mt-1 text-xl font-bold text-slate-800">
                 {challans.length === 1 ? first.student_name : `${challans.length} challans`}
               </h2>
@@ -256,15 +298,31 @@ export function ChallanView({ challans, onClose }: { challans: FeeChallan[]; onC
         </div>
 
         <div className="challan-preview-head">
-          <span>Fee month <strong>{first.month}</strong></span>
+          <span>Challan no. <strong>{first.challan_number || firstCode}</strong></span>
+          <span>Admission no. <strong>{first.admission_number || '—'}</strong></span>
+          <span>Fee month <strong>{monthLabel(first.month)}</strong></span>
           <span>Due date <strong>{formatDay(first.due_date)}</strong></span>
         </div>
 
+        <div className="challan-pay-preview">
+          <div>
+            <span className="eyebrow">Pay with Easypaisa</span>
+            <p>
+              {settings.easypaisa_account_no.trim()
+                ? <>Account no. <strong>{settings.easypaisa_account_no}</strong>{settings.easypaisa_account_name.trim() ? ` · ${settings.easypaisa_account_name}` : ''}</>
+                : 'No Easypaisa account is saved yet. An administrator can add it under Fee Structure.'}
+            </p>
+          </div>
+          <FeeBarcode value={firstCode} caption={challans.length === 1 ? 'Scan to pay' : 'First challan shown'} height={54} module={2} />
+        </div>
+
         <div className="table-wrap challan-preview-table">
-          <table className="min-w-[720px]">
+          <table className="min-w-[820px]">
             <thead>
               <tr>
+                <th>Challan no.</th>
                 <th>Student</th>
+                <th>Admission no.</th>
                 <th>Class</th>
                 {headKeys.map((key) => <th key={key} className="text-right">{HEAD_LABELS[key]}</th>)}
                 <th className="text-right">Total</th>
@@ -273,7 +331,9 @@ export function ChallanView({ challans, onClose }: { challans: FeeChallan[]; onC
             <tbody>
               {challans.map((challan) => (
                 <tr key={challan.id}>
+                  <td className="fee-mono">{challan.challan_number || challanScanCode(challan)}</td>
                   <td><strong>{challan.student_name}</strong></td>
+                  <td>{challan.admission_number || '—'}</td>
                   <td>{challan.class_name ?? '—'} · {challan.section_name ?? '—'}</td>
                   {headKeys.map((key) => (
                     <td key={key} className="text-right tabular-nums">

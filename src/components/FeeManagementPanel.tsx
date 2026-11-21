@@ -3,6 +3,7 @@ import {
   BellRing, Coins, FileSpreadsheet, Printer, RefreshCw, Send, Wallet,
 } from 'lucide-react';
 import { FeeReceiptView } from '@/components/FeeDocuments';
+import { FeeScanPanel } from '@/components/FeeScanPanel';
 import { ChallanTab, ReportsTab, StructureTab } from '@/components/FeeSetupTabs';
 import { fetchAbsenteeSendMode } from '@/lib/absenteeAlerts';
 import { todayKey } from '@/lib/attendance';
@@ -11,10 +12,10 @@ import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
 import type { Student } from '@/lib/schoolTypes';
 import { useAuth } from '@/lib/auth';
 import {
-  PAYMENT_METHODS, buildFeeSummary, collectedInMonth, collectedOn, fetchChallans,
-  fetchFeePayments, fetchFeeStructures, formatDay, formatMoney, monthKey, monthLabel,
+  EMPTY_PAYMENT_SETTINGS, PAYMENT_METHODS, buildFeeSummary, collectedInMonth, collectedOn, fetchChallans,
+  fetchFeePayments, fetchFeeStructures, fetchPaymentSettings, formatDay, formatMoney, monthKey, monthLabel,
   monthOptions, recordFeePayment,
-  type FeeChallan, type FeePayment, type FeeStructure, type PaymentMethod,
+  type FeeChallan, type FeePayment, type FeeStructure, type PaymentMethod, type PaymentSettings,
 } from '@/lib/fees';
 import { pickWhatsAppContact, whatsappNumberWarning } from '@/lib/whatsapp';
 import { closeWhatsAppWindow, openWhatsAppChat, primeWhatsAppWindow } from '@/lib/whatsappQueue';
@@ -69,6 +70,7 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
   const [loadError, setLoadError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
   const [sendMode, setSendMode] = useState<'web' | 'desktop'>('web');
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(EMPTY_PAYMENT_SETTINGS);
 
   const today = todayKey();
   const currentMonth = monthKey();
@@ -77,11 +79,14 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      const [structureResult, paymentResult] = await Promise.all([fetchFeeStructures(), fetchFeePayments(400)]);
+      const [structureResult, paymentResult, settingsResult] = await Promise.all([
+        fetchFeeStructures(), fetchFeePayments(400), fetchPaymentSettings(),
+      ]);
       if (cancelled) return;
       setStructures(structureResult.structures);
       setPayments(paymentResult.payments);
-      setLoadError(structureResult.error ?? paymentResult.error ?? '');
+      setPaymentSettings(settingsResult.settings);
+      setLoadError(structureResult.error ?? paymentResult.error ?? settingsResult.error ?? '');
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -204,7 +209,6 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           onSaved={refreshEverything}
         />
       )}
-
       {tab === 'defaulters' && (
         <DefaultersTab
           students={activeStudents}
@@ -226,13 +230,15 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           sectionsFor={sectionsFor}
           month={challanMonth}
           setMonth={setChallanMonth}
+          savedChallans={challans}
+          paymentSettings={paymentSettings}
           onToast={onToast}
           onSaved={reload}
         />
       )}
 
       {tab === 'structure' && (
-        <StructureTab structures={structures} isAdmin={isAdmin} onToast={onToast} onSaved={reload} />
+        <StructureTab structures={structures} isAdmin={isAdmin} paymentSettings={paymentSettings} onToast={onToast} onSaved={reload} />
       )}
 
       {tab === 'reports' && (
@@ -385,6 +391,9 @@ function CollectionTab({ students, classList, sectionList, sectionsFor, structur
       remarks: remarks.trim() || null,
       balance_after: result.balanceAfter,
       created_at: new Date().toISOString(),
+      challan_id: null,
+      challan_number: null,
+      source: 'manual',
       student_name: student.full_name,
       class_name: student.class_name,
       section_name: student.section_name,
@@ -405,6 +414,8 @@ function CollectionTab({ students, classList, sectionList, sectionsFor, structur
 
   return (
     <div className="fee-section">
+      <FeeScanPanel today={today} onToast={onToast} onPaid={onSaved} />
+
       <section className="fee-card">
         <div className="fee-card-head">
           <div><span className="eyebrow">Step 1</span><h2>Find the student</h2></div>
@@ -472,7 +483,7 @@ function CollectionTab({ students, classList, sectionList, sectionsFor, structur
               <label className="control-field"><span>Amount received (Rs)</span>
                 <input type="number" min="1" step="1" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={remaining > 0 ? String(Math.round(remaining)) : 'e.g. 2500'} required />
               </label>
-              <div className="fee-form-row">
+              <div className="fee-filters">
                 <label className="control-field"><span>Payment date</span>
                   <input type="date" max={today} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required />
                 </label>
@@ -481,13 +492,13 @@ function CollectionTab({ students, classList, sectionList, sectionsFor, structur
                     {PAYMENT_METHODS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
                   </select>
                 </label>
+                <label className="control-field"><span>Receipt no. (leave blank to generate)</span>
+                  <input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} placeholder="Auto" maxLength={40} />
+                </label>
+                <label className="control-field full"><span>Remarks</span>
+                  <input value={remarks} onChange={(event) => setRemarks(event.target.value)} placeholder="Optional note for the receipt" />
+                </label>
               </div>
-              <label className="control-field"><span>Receipt no. (leave blank to generate)</span>
-                <input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} placeholder="Auto" maxLength={40} />
-              </label>
-              <label className="control-field"><span>Remarks</span>
-                <input value={remarks} onChange={(event) => setRemarks(event.target.value)} placeholder="Optional note for the receipt" />
-              </label>
               <div className="fee-form-actions">
                 {remaining > 0 && (
                   <button type="button" className="secondary-button" onClick={() => setAmount(String(Math.round(remaining)))}>Full payment</button>
@@ -521,7 +532,7 @@ function CollectionTab({ students, classList, sectionList, sectionsFor, structur
                     <td className="text-right font-semibold tabular-nums">{formatMoney(payment.amount)}</td>
                     <td className="text-right tabular-nums">{formatMoney(payment.balance_after)}</td>
                     <td className="text-right no-print">
-                      <button type="button" className="fee-link" onClick={() => setHistoryFor(payment)}><Printer size={14} /> Receipt</button>
+                      <button type="button" className="fee-link" onClick={() => setHistoryFor(payment)}><Printer size={14} /> {payment.challan_number ? 'Receipt · challan' : 'Receipt'}</button>
                     </td>
                   </tr>
                 ))}

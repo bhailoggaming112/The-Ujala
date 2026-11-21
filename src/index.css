@@ -1702,9 +1702,39 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .fee-tab { flex: 1 1 auto; text-align: center; }
 }
 
+/* --- Barcode ------------------------------------------------------------ */
+.fee-barcode { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.fee-barcode-svg { display: block; width: 100%; max-width: 320px; height: auto; background: #ffffff; }
+.fee-barcode-value { font: 700 11px 'SFMono-Regular', 'Menlo', monospace; letter-spacing: 2px; color: #2e4759; }
+.fee-barcode-caption { color: #93a5af; font-size: 10.5px; }
+
+/* --- Scan to pay -------------------------------------------------------- */
+.fee-scan { border-color: #cfe8ef; background: linear-gradient(180deg, #f7fcfd, #ffffff 55%); }
+.fee-scan-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.fee-scan-field { flex: 1 1 320px; display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1.5px solid #b7dbe5; border-radius: 12px; background: #ffffff; color: #4faecb; box-shadow: inset 0 1px 2px #38718a0d; transition: border-color .16s ease, box-shadow .16s ease; }
+.fee-scan-field:focus-within { border-color: #46a3c2; box-shadow: 0 0 0 4px #dff4f8; }
+.fee-scan-field input { flex: 1; border: 0; outline: 0; background: transparent; color: #2e4759; font: 600 13.5px 'SFMono-Regular', 'Menlo', monospace; letter-spacing: .6px; }
+.fee-scan-field input::placeholder { color: #a9bcc4; font-family: 'DM Sans', sans-serif; letter-spacing: 0; font-weight: 400; }
+
+.fee-scan-result { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; padding-top: 18px; border-top: 1px dashed #dbe9ee; }
+.fee-scan-student h3 { margin: 10px 0 4px; font: 800 19px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; letter-spacing: -.4px; }
+.fee-scan-student > p { margin: 0 0 12px; color: #8598a4; font-size: 12px; }
+.fee-scan-student > p strong { color: #526b7b; }
+.fee-scan-facts { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.fee-scan-facts > div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px dotted #e3ebee; }
+.fee-scan-facts > div.strong { grid-column: 1 / -1; border-bottom: 0; border-radius: 9px; background: #f2f9fb; padding: 9px 12px; }
+.fee-scan-facts dt { color: #7b8f9b; font-size: 11.5px; }
+.fee-scan-facts dd { margin: 0; color: #2e4759; font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.fee-scan-facts > div.strong dd { font-size: 15px; color: #226d86; }
+.fee-scan-form { align-self: start; }
+
+.challan-pay-preview { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-top: 14px; padding: 14px 18px; border-radius: 14px; background: linear-gradient(120deg, #eef8fa, #f7fcfd); }
+.challan-pay-preview p { margin: 6px 0 0; color: #526b7b; font-size: 12.5px; }
+.challan-pay-preview p strong { color: #226d86; font-size: 13.5px; }
+
 /* --- Printed fee receipt and challan ------------------------------------ */
 @media print {
-  .sidebar, .topbar, .module-heading, .fee-tabs, .fee-quick, .fee-filters, .fee-alert { display: none !important; }
+  .sidebar, .topbar, .module-heading, .fee-tabs, .fee-quick, .fee-filters, .fee-alert, .fee-scan { display: none !important; }
   .fee-panel { gap: 10px; }
   .fee-card { border: 1px solid #dbe4e9; box-shadow: none; break-inside: avoid; }
 
@@ -1719,4 +1749,30 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .print-fee-receipt .print-row-value, .print-challan .print-row-value { font-weight: 700; }
   .print-challan .print-row.total { border-top: 1.5px solid #132a3a; background: #f7fbfc; font-weight: 800; }
   .print-challan + .print-challan { page-break-before: always; break-before: page; }
+
+  /* Student Copy label and the pay-with-Easypaisa block on the challan. */
+  .print-challan .challan-copy-label { flex: 0 0 auto; text-align: center; }
+  .print-challan .challan-copy-label span {
+    display: inline-block;
+    border: 1.5px solid #2f6d86;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: #2f6d86;
+  }
+  .print-challan .challan-pay-block { display: flex; gap: 16px; align-items: flex-start; margin-top: 14px; break-inside: avoid; }
+  .print-challan .challan-pay-copy { flex: 1; }
+  .print-challan .challan-pay-copy h2 { font-size: 12px; border-bottom: 1px solid #999; padding-bottom: 3px; margin: 0 0 6px; }
+  .print-challan .challan-pay-note { margin: 6px 0 0; font-size: 9.5px; color: #46596a; }
+  .print-challan .challan-barcode-block { flex: 0 0 210px; text-align: center; }
+  .print-challan .fee-barcode-svg { max-width: 210px; }
+  .print-challan .fee-barcode-value { font-size: 10px; letter-spacing: 1.6px; }
+  .print-challan .fee-barcode-caption { font-size: 8.5px; }
+}
+
+@media (max-width: 860px) {
+  .fee-scan-result { grid-template-columns: 1fr; }
 }
