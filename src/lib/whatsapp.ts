@@ -82,10 +82,23 @@ export function whatsappNumberWarning(student: WhatsAppFields): string {
   return 'The saved contact numbers are not valid phone numbers, so no WhatsApp chat can be opened for this student.';
 }
 
-export function whatsappLink(rawPhone: string | null | undefined, message: string): string {
+// 'web' keeps every chat inside one browser tab; 'desktop' hands the message to the
+// installed WhatsApp app and skips the "Share on WhatsApp" landing page.
+export type AlertSendMode = 'web' | 'desktop';
+
+export function whatsappLink(
+  rawPhone: string | null | undefined,
+  message: string,
+  mode: AlertSendMode = 'web',
+): string {
   const phone = cleanPhoneNumber(rawPhone);
   const text = encodeURIComponent(message);
-  return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+  if (mode === 'desktop') {
+    return phone ? `whatsapp://send?phone=${phone}&text=${text}` : `whatsapp://send?text=${text}`;
+  }
+  return phone
+    ? `https://web.whatsapp.com/send?phone=${phone}&text=${text}`
+    : `https://web.whatsapp.com/send?text=${text}`;
 }
 
 export function attachmentError(file: File): string | null {

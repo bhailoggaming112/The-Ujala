@@ -1,23 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCheck, Clock, ExternalLink, Loader2, MessageCircle, Paperclip, RefreshCw, Save, Send, Trash2, Upload, Users, X } from 'lucide-react';
+import { AlertTriangle, CheckCheck, Clock, ExternalLink, Globe, Loader2, MessageCircle, Monitor, Paperclip, RefreshCw, Save, Send, Trash2, Upload, Users, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { AbsenteeQueueEntry, AbsenteeTemplate } from '@/lib/schoolTypes';
+import type { AbsenteeAlertStatus, AbsenteeQueueEntry, AbsenteeTemplate } from '@/lib/schoolTypes';
 import { renderAbsenteeText, SCHOOL_NAME, SCHOOL_NAME_UR } from '@/lib/noticeText';
 import { todayKey } from '@/lib/attendance';
 import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
 import {
-  buildAbsenteeEntries, fetchAbsenteeLanguage, fetchAbsenteeQueue, fetchAbsenteeTemplates,
+  buildAbsenteeEntries, fetchAbsenteeLanguage, fetchAbsenteeQueue, fetchAbsenteeSendMode, fetchAbsenteeTemplates,
   fetchAbsentStudentsForDate, markAbsenteesSent, removeAbsentees, saveAbsenteeLanguage,
-  saveAbsenteeTemplate, syncAbsentees,
+  saveAbsenteeSendMode, saveAbsenteeTemplate, syncAbsentees,
 } from '@/lib/absenteeAlerts';
-import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, uploadAbsenteeAttachment, whatsappLink } from '@/lib/whatsapp';
+import {
+  ALERT_NOTICE_TYPES, ALERT_PLACEHOLDERS, ALERT_STATUSES, ALERT_STATUS_LABELS,
+  alertWordingFrom, defaultWordingFor, type AlertTemplates,
+} from '@/lib/alertStatuses';
+import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, uploadAbsenteeAttachment, type AlertSendMode } from '@/lib/whatsapp';
+import { closeWhatsAppWindow, openWhatsAppChat, primeWhatsAppWindow } from '@/lib/whatsappQueue';
 
-const DEFAULT_WORDING: Record<AbsenteeTemplate['language'], string> = {
-  English: `Dear Parent or Guardian, {student_name} of {class} was marked absent on {date} at {school_name}. Please contact the school office if this was not expected.`,
-  Urdu: `محترم والدین، {student_name} ({class}) {date} کو {school_name} میں غیر حاضر رہے۔ اگر یہ غیر متوقع تھا تو براہِ کرم اسکول دفتر سے رابطہ کریں۔`,
-};
+const SEND_MODES: { value: AlertSendMode; label: string; hint: string; icon: typeof Globe }[] = [
+  { value: 'web', label: 'WhatsApp Web', hint: 'One browser tab is reused for every alert', icon: Globe },
+  { value: 'desktop', label: 'WhatsApp Desktop', hint: 'Opens the installed app and skips the landing page', icon: Monitor },
+];
 
-const PLACEHOLDERS = ['{student_name}', '{class}', '{date}', '{school_name}'];
+// The wording is picked per student from the status saved in the register, so a Leave
+// row gets the Leave message and an Absent row gets the Absent message.
+const wordingByStatus = (source: AlertTemplates, language: AbsenteeTemplate['language']) =>
+  ALERT_STATUSES.reduce((accumulator, key) => {
+    accumulator[key] = source[key][language];
+    return accumulator;
+  }, {} as Record<AbsenteeAlertStatus, string>);
 
 const clampPause = (value: string, fallback: number) => {
   const parsed = Number(value);
@@ -30,7 +41,14 @@ const wait = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(
 export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (message: string) => void; onQueueChanged?: () => void }) {
   const [forDate, setForDate] = useState(todayKey);
   const [language, setLanguage] = useState<AbsenteeTemplate['language']>('English');
-  const [wording, setWording] = useState<Record<AbsenteeTemplate['language'], string>>({ ...DEFAULT_WORDING });
+  // Which alert's wording is open in the editor: Absent, Leave or Late.
+  const [status, setStatus] = useState<AbsenteeAlertStatus>('absent');
+  const [wording, setWording] = useState<AlertTemplates>(() => alertWordingFrom([]));
+  // WhatsApp Web keeps everything in one reused tab; the Desktop app skips the
+  // intermediate "Share on WhatsApp" page.
+  const [sendMode, setSendMode] = useState<AlertSendMode>('web');
+  // Narrows the list to one kind of alert without changing what is sent.
+  const [statusFilter, setStatusFilter] = useState<AbsenteeAlertStatus | ''>('');
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [queue, setQueue] = useState<AbsenteeQueueEntry[]>([]);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -45,7 +63,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const cancelSend = useRef(false);
   // Held in a ref so the wording only reaches the database when the office saves it,
   // not on every keystroke.
-  const committedWording = useRef<Record<AbsenteeTemplate['language'], string>>({ ...DEFAULT_WORDING });
+  const committedWording = useRef<AlertTemplates>(alertWordingFrom([]));
   const [wordingVersion, setWordingVersion] = useState(0);
   const [reloadToken, setReloadToken] = useState(0);
   // One optional file for the whole batch: its link is appended to every message and
@@ -69,17 +87,17 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [storedLanguage, stored] = await Promise.all([fetchAbsenteeLanguage(), fetchAbsenteeTemplates()]);
+      const [storedLanguage, stored, storedMode] = await Promise.all([
+        fetchAbsenteeLanguage(),
+        fetchAbsenteeTemplates(),
+        fetchAbsenteeSendMode(),
+      ]);
       if (cancelled) return;
       setLanguage(storedLanguage);
-      if (!stored.error) {
-        const next = { ...DEFAULT_WORDING };
-        for (const template of stored.templates) {
-          if (template.template_text?.trim()) next[template.language] = template.template_text;
-        }
-        committedWording.current = next;
-        setWording(next);
-      }
+      setSendMode(storedMode);
+      const next = stored.error ? alertWordingFrom([]) : alertWordingFrom(stored.templates);
+      committedWording.current = next;
+      setWording(next);
       setTemplatesLoaded(true);
     })();
     return () => { cancelled = true; };
@@ -101,7 +119,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       }
 
       const result = await syncAbsentees(
-        buildAbsenteeEntries(language, committedWording.current[language], roster.students, forDate, attachment),
+        buildAbsenteeEntries(language, wordingByStatus(committedWording.current, language), roster.students, forDate, attachment),
         roster.students.map((student) => student.id),
         forDate,
       );
@@ -118,29 +136,43 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     return () => { cancelled = true; };
   }, [templatesLoaded, forDate, language, wordingVersion, reloadToken, attachment]);
 
-  const queuedRows = queue.filter((entry) => entry.status === 'queued');
+  // Every waiting alert for the day, whatever its status, drives the sidebar count.
+  const allQueued = queue.filter((entry) => entry.status === 'queued');
+  // The table itself is narrowed by the status pills, so the office can work one kind
+  // of alert at a time.
+  const visibleRows = statusFilter === '' ? queue : queue.filter((entry) => entry.attendance_status === statusFilter);
+  const queuedRows = visibleRows.filter((entry) => entry.status === 'queued');
   const toSend = queuedRows.filter((entry) => draftSelected.includes(entry.id));
   const previewEntry = toSend[0] ?? queuedRows[0] ?? null;
+
+  const statusCounts = ALERT_STATUSES.reduce((accumulator, key) => {
+    accumulator[key] = queue.filter((entry) => entry.attendance_status === key).length;
+    return accumulator;
+  }, {} as Record<AbsenteeAlertStatus, number>);
 
   // How many of the rows on screen cannot be messaged because no real WhatsApp
   // number is saved for the student.
   const missingNumbers = queuedRows.filter((entry) => !isValidWhatsAppNumber(entry.parent_phone)).length;
 
-  const sent = queue.filter((entry) => entry.status === 'sent');
   const allSelected = queuedRows.length > 0 && toSend.length === queuedRows.length;
 
   // Keeps the sidebar count in step whenever the list of waiting alerts changes.
-  useEffect(() => { queueChanged.current?.(); }, [queuedRows.length]);
+  useEffect(() => { queueChanged.current?.(); }, [allQueued.length]);
 
-  const preview = previewEntry
+  // The preview shows the wording being edited, filled in with a student who actually
+  // has that status, so the Leave wording previews a Leave alert.
+  const previewEntryForStatus = toSend.find((entry) => entry.attendance_status === status)
+    ?? queuedRows.find((entry) => entry.attendance_status === status)
+    ?? previewEntry;
+  const preview = previewEntryForStatus
     ? messageWithAttachment(
-      renderAbsenteeText(wording[language], {
-        student_name: previewEntry.student_name,
-        class_name: previewEntry.class_name ?? '',
-        section_name: previewEntry.section_name ?? '',
+      renderAbsenteeText(wording[status][language], {
+        student_name: previewEntryForStatus.student_name,
+        class_name: previewEntryForStatus.class_name ?? '',
+        section_name: previewEntryForStatus.section_name ?? '',
         date: forDate,
       }),
-      previewEntry.attachment_url ?? attachment?.url ?? null,
+      previewEntryForStatus.attachment_url ?? attachment?.url ?? null,
     )
     : '';
 
@@ -148,19 +180,37 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     if (next === language) return;
     setLanguage(next);
     void saveAbsenteeLanguage(next);
-    onToast(`${next} is now the active absentee template. The list below has been re-worded.`);
+    onToast(`${next} is now the active wording. The waiting alerts below have been re-worded.`);
+  };
+
+  const pickStatus = (next: AbsenteeAlertStatus) => {
+    if (next === status) return;
+    setStatus(next);
+    onToast(`Editing the ${ALERT_STATUS_LABELS[next].toLowerCase()} wording. Each status keeps its own message.`);
+  };
+
+  const pickSendMode = (next: AlertSendMode) => {
+    if (next === sendMode) return;
+    setSendMode(next);
+    void saveAbsenteeSendMode(next);
+    onToast(next === 'desktop'
+      ? 'Alerts will open in the WhatsApp Desktop app from now on.'
+      : 'Alerts will open in one reused WhatsApp Web tab from now on.');
   };
 
   const saveWording = async () => {
-    const text = wording[language].trim();
+    const text = wording[status][language].trim();
     if (!text) { onToast('Write the alert message before saving it.'); return; }
     setSavingWording(true);
-    const error = await saveAbsenteeTemplate(language, text);
+    const error = await saveAbsenteeTemplate(status, language, text);
     if (error) { setSavingWording(false); onToast(error); return; }
-    committedWording.current = { ...committedWording.current, [language]: text };
+    committedWording.current = {
+      ...committedWording.current,
+      [status]: { ...committedWording.current[status], [language]: text },
+    };
     setSavingWording(false);
     setWordingVersion((current) => current + 1);
-    onToast(`${language} wording saved${queuedRows.length > 0 ? ' and applied to the waiting rows below' : ''}.`);
+    onToast(`${ALERT_STATUS_LABELS[status]} · ${language} wording saved${allQueued.length > 0 ? ' and applied to the waiting alerts below' : ''}.`);
   };
 
   const refresh = () => setReloadToken((current) => current + 1);
@@ -204,8 +254,9 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     onToast('Attachment removed. Alerts will go out as text only.');
   };
 
-  // Each alert opens its own WhatsApp tab with the message pre-filled. The pause
-  // between sends keeps the school number from being flagged for bulk messaging.
+  // Each alert opens in the one named WhatsApp tab, or in the WhatsApp Desktop app,
+  // with the message pre-filled. The pause between sends keeps the school number from
+  // being flagged for bulk messaging.
   const sendSelected = async () => {
     if (toSend.length === 0) { onToast('Tick the students you want to message first.'); return; }
     // A row whose saved contact is not a real phone number is never dialled; the
@@ -217,6 +268,9 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       return;
     }
     cancelSend.current = false;
+    // The reusable tab is claimed now, while the click still counts as a user action,
+    // so the first send is not treated as a blocked pop-up.
+    const senderWindow = primeWhatsAppWindow(sendMode);
     setSending(true);
     setSendProgress({ done: 0, total: sendable.length });
     setBlocked([]);
@@ -236,7 +290,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       class_name: entry.class_name,
       section_name: entry.section_name,
       parent_phone: entry.parent_phone,
-      message_type: 'absentee_alert',
+      message_type: ALERT_NOTICE_TYPES[entry.attendance_status],
       message_body: outgoing[index].message,
       attendance_date: entry.attendance_date,
       attachment_url: entry.attachment_url ?? attachment?.url ?? null,
@@ -245,6 +299,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     if (log.error) {
       setSending(false);
       setSendProgress(null);
+      closeWhatsAppWindow(senderWindow);
       onToast('The alerts could not be logged, so nothing was sent. Please try again.');
       return;
     }
@@ -260,13 +315,12 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       }
       if (cancelSend.current) break;
       const { entry, message } = outgoing[index];
-      const link = whatsappLink(entry.parent_phone, message);
-      const opened = window.open(link, '_blank', 'noopener,noreferrer');
-      if (opened) {
+      const opened = openWhatsAppChat(entry.parent_phone, message, sendMode);
+      if (opened.ok) {
         sentIds.push(entry.id);
         sentLogIds.push(log.ids[index]);
       } else {
-        blockedRows.push({ id: entry.id, logId: log.ids[index] ?? null, student: entry.student_name, phone: entry.parent_phone ?? '', link });
+        blockedRows.push({ id: entry.id, logId: log.ids[index] ?? null, student: entry.student_name, phone: entry.parent_phone ?? '', link: opened.link });
       }
       setSendProgress({ done: index + 1, total: outgoing.length });
     }
@@ -283,9 +337,10 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       setBlocked(blockedRows);
       onToast(`${blockedRows.length} chat${blockedRows.length === 1 ? '' : 's'} could not open because your browser blocked new tabs. Use the links below to send them.`);
     } else if (sentIds.length > 0) {
-      onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened and recorded in the WhatsApp SMS Report.`);
+      onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened in ${sendMode === 'desktop' ? 'the WhatsApp Desktop app' : 'WhatsApp Web'} and recorded in the WhatsApp SMS Report.`);
     } else {
       await supabase.from('school_sms_log').delete().in('id', log.ids);
+      closeWhatsAppWindow(senderWindow);
       onToast('Sending stopped. Nothing was sent.');
     }
     if (sentIds.length > 0) {
@@ -319,9 +374,9 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
         <div className="absentee-toolbar-head">
           <div>
             <span className="eyebrow">Send absentee WhatsApp SMS</span>
-            <h2>{schoolHeading} · {queuedRows.length} alert{queuedRows.length === 1 ? '' : 's'} waiting to send</h2>
+            <h2>{schoolHeading} · {allQueued.length} alert{allQueued.length === 1 ? '' : 's'} waiting to send</h2>
             <p className="panel-subtitle">
-              Every absence saved in the Daily Attendance register lands here on its own, and an absence notice appears in the parent portal straight away.
+              Every absence, leave day and late arrival saved in the Daily Attendance register lands here on its own, each with the message that matches how the student was marked, and a matching notice appears in the parent portal straight away.
             </p>
           </div>
           <span className={`absentee-sync ${syncing ? 'busy' : ''}`}>
@@ -329,11 +384,30 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
           </span>
         </div>
         <div className="absentee-toolbar-controls">
-          <label className="control-field">Absence date
+          <label className="control-field">Register date
             <input type="date" value={forDate} onChange={(event) => setForDate(event.target.value)} />
           </label>
           <button type="button" className="secondary-button" onClick={() => setForDate(todayKey())}><RefreshCw size={15} /> Today</button>
           <button type="button" className="secondary-button" onClick={refresh} disabled={syncing}><Loader2 size={15} className={syncing ? 'spin' : ''} /> Refresh list</button>
+        </div>
+        <div className="absentee-sendmode">
+          <span className="absentee-sendmode-label">Open chats in</span>
+          <div className="segmented-control compact">
+            {SEND_MODES.map((option) => {
+              const ModeIcon = option.icon;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={sendMode === option.value ? 'selected' : ''}
+                  onClick={() => pickSendMode(option.value)}
+                >
+                  <ModeIcon size={14} /> {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <small className="absentee-sendmode-hint">{SEND_MODES.find((option) => option.value === sendMode)?.hint}</small>
         </div>
       </div>
 
@@ -376,35 +450,51 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
 
       <div className="panel absentee-template">
         <div className="absentee-template-head">
-          <div className="segmented-control compact lang-toggle">
-            {(['English', 'Urdu'] as const).map((lang) => (
-              <button key={lang} type="button" className={language === lang ? 'selected' : ''} onClick={() => pickLanguage(lang)}>
-                {lang}
-              </button>
-            ))}
+          <div className="absentee-template-pickers">
+            <div className="segmented-control compact">
+              {ALERT_STATUSES.map((key) => (
+                <button key={key} type="button" className={status === key ? 'selected' : ''} onClick={() => pickStatus(key)}>
+                  {ALERT_STATUS_LABELS[key]}
+                </button>
+              ))}
+            </div>
+            <div className="segmented-control compact lang-toggle">
+              {(['English', 'Urdu'] as const).map((lang) => (
+                <button key={lang} type="button" className={language === lang ? 'selected' : ''} onClick={() => pickLanguage(lang)}>
+                  {lang}
+                </button>
+              ))}
+            </div>
           </div>
-          <span className="absentee-template-note">One template is active at a time. The text stays editable.</span>
+          <span className="absentee-template-note">Each status keeps its own English and Urdu wording. Students automatically get the message that matches how they were marked.</span>
         </div>
 
-        <label className="control-field absentee-template-field">Alert message
+        <label className="control-field absentee-template-field">
+          {ALERT_STATUS_LABELS[status]} alert message
           <textarea
             rows={3}
             dir={language === 'Urdu' ? 'rtl' : 'ltr'}
             className={language === 'Urdu' ? 'urdu-text' : undefined}
-            value={wording[language]}
-            onChange={(event) => setWording((current) => ({ ...current, [language]: event.target.value }))}
-            placeholder="Write the absentee alert wording"
+            value={wording[status][language]}
+            onChange={(event) => setWording((current) => ({
+              ...current,
+              [status]: { ...current[status], [language]: event.target.value },
+            }))}
+            placeholder={`Write the ${ALERT_STATUS_LABELS[status].toLowerCase()} alert wording`}
           />
         </label>
 
         <div className="absentee-placeholders">
           <span>Tap to insert:</span>
-          {PLACEHOLDERS.map((token) => (
+          {ALERT_PLACEHOLDERS.map((token) => (
             <button
               key={token}
               type="button"
               className="absentee-placeholder"
-              onClick={() => setWording((current) => ({ ...current, [language]: `${current[language]}${token}` }))}
+              onClick={() => setWording((current) => ({
+                ...current,
+                [status]: { ...current[status], [language]: `${current[status][language]}${token}` },
+              }))}
             >
               {token}
             </button>
@@ -413,21 +503,24 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
 
         <div className="absentee-preview">
           <span className="absentee-preview-label">
-            Preview{previewEntry ? ` · ${previewEntry.student_name}` : ''}{toSend.length > 0 ? ' (first selected row)' : ''}
+            Preview · {ALERT_STATUS_LABELS[status]}{previewEntryForStatus ? ` · ${previewEntryForStatus.student_name}` : ''}{toSend.length > 0 ? ' (first selected row)' : ''}
           </span>
           <p className={language === 'Urdu' ? 'urdu-text' : undefined} dir={language === 'Urdu' ? 'rtl' : 'ltr'}>
-            {preview || 'Save the register in Daily Attendance and the wording will preview here.'}
+            {preview || `Save the register in Daily Attendance and the ${ALERT_STATUS_LABELS[status].toLowerCase()} wording will preview here.`}
           </p>
         </div>
 
         <div className="absentee-template-actions">
           <button type="button" className="secondary-button" onClick={() => void saveWording()} disabled={savingWording}>
-            <Save size={15} /> {savingWording ? 'Saving…' : 'Save wording'}
+            <Save size={15} /> {savingWording ? 'Saving…' : `Save ${ALERT_STATUS_LABELS[status]} wording`}
           </button>
           <button
             type="button"
             className="ghost-button"
-            onClick={() => setWording((current) => ({ ...current, [language]: DEFAULT_WORDING[language] }))}
+            onClick={() => setWording((current) => ({
+              ...current,
+              [status]: { ...current[status], [language]: defaultWordingFor(status, language) },
+            }))}
           >
             Restore default
           </button>
@@ -437,8 +530,8 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       <div className="panel absentee-queue">
       <div className="absentee-queue-head">
         <div className="absentee-queue-stats">
-          <span className="absentee-chip queued"><Clock size={14} /> {queuedRows.length} waiting</span>
-          <span className="absentee-chip sent"><CheckCheck size={14} /> {sent.length} sent</span>
+          <span className="absentee-chip queued"><Clock size={14} /> {allQueued.length} waiting</span>
+          <span className="absentee-chip sent"><CheckCheck size={14} /> {queue.length - allQueued.length} sent</span>
           <span className="absentee-chip total"><Users size={14} /> {queue.length} on the list</span>
         </div>
         <div className="absentee-queue-actions">
@@ -452,6 +545,23 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
             <Trash2 size={15} /> Delete
           </button>
         </div>
+      </div>
+
+      <div className="absentee-status-filter">
+        <span className="absentee-filter-label">Show</span>
+        <button type="button" className={`absentee-filter ${statusFilter === '' ? 'on' : ''}`} onClick={() => setStatusFilter('')}>
+          All {queue.length}
+        </button>
+        {ALERT_STATUSES.map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={`absentee-filter ${key} ${statusFilter === key ? 'on' : ''}`}
+            onClick={() => setStatusFilter(key)}
+          >
+            {ALERT_STATUS_LABELS[key]} {statusCounts[key]}
+          </button>
+        ))}
       </div>
 
       <div className="absentee-pause">
@@ -484,6 +594,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
                 />
               </th>
               <th>Student</th>
+              <th>Alert</th>
               <th>Class / Section</th>
               <th>Parent number</th>
               <th>Language</th>
@@ -493,7 +604,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
             </tr>
           </thead>
           <tbody>
-            {queue.map((entry) => (
+            {visibleRows.map((entry) => (
               <tr key={entry.id} className={entry.status === 'sent' ? 'absentee-row sent' : 'absentee-row'}>
                 <td className="absentee-check">
                   <input
@@ -506,6 +617,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
                   />
                 </td>
                 <td><strong>{entry.student_name}</strong></td>
+                <td><span className={`alert-badge ${entry.attendance_status}`}>{ALERT_STATUS_LABELS[entry.attendance_status]}</span></td>
                 <td>{entry.class_name ? `${entry.class_name} · ${entry.section_name ?? '—'}` : '—'}</td>
                 <td>
                   {entry.parent_phone
@@ -533,10 +645,12 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
             ))}
           </tbody>
         </table>
-        {queue.length === 0 && !syncing && (
+        {visibleRows.length === 0 && !syncing && (
           <div className="empty-state large">
             <MessageCircle size={20} />
-            No absences are saved for this date yet. Save the register in Daily Attendance and the absentees will appear here on their own.
+            {queue.length === 0
+              ? 'No absences, leave days or late arrivals are saved for this date yet. Save the register in Daily Attendance and they will appear here on their own.'
+              : `No ${statusFilter === '' ? '' : `${ALERT_STATUS_LABELS[statusFilter].toLowerCase()} `}alerts for this date. Choose All to see the whole day.`}
           </div>
         )}
       </div>
@@ -545,7 +659,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
         <span className="absentee-send-copy">
           {toSend.length === 0
             ? 'Tick the students to message, or use Select all.'
-            : `${toSend.length} student${toSend.length === 1 ? '' : 's'} selected · about ${Math.max(0, toSend.length - 1) * ((lowPause + highPause) / 2) | 0}s of pauses`}
+            : `${toSend.length} student${toSend.length === 1 ? '' : 's'} selected · ${ALERT_STATUSES.map((key) => `${ALERT_STATUS_LABELS[key]} ${toSend.filter((entry) => entry.attendance_status === key).length}`).join(' · ')} · about ${Math.max(0, toSend.length - 1) * ((lowPause + highPause) / 2) | 0}s of pauses`}
         </span>
         <div className="absentee-send-actions">
           {sending && (

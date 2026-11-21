@@ -84,15 +84,15 @@ export function ParentDashboard() {
       <section className="panel parent-notices-panel">
         <div className="panel-header">
           <div>
-            <span className="eyebrow">Absence notifications</span>
+            <span className="eyebrow">Attendance notifications</span>
             <h2>Notices from the school</h2>
-            <p className="panel-subtitle">An absence notice appears here as soon as the school records your child as absent.</p>
+            <p className="panel-subtitle">A notice appears here as soon as the school records your child as absent, on leave or arriving late.</p>
           </div>
           <Bell size={20} />
         </div>
         {noticeError && <p className="dmc-warning">{noticeError}</p>}
         {notifications.length === 0 ? (
-          <p className="empty-state">No notices yet. When your child is marked absent, the details will appear here.</p>
+          <p className="empty-state">No notices yet. When your child is marked absent, on leave or late, the details will appear here.</p>
         ) : (
           <ul className="parent-notice-list">
             {notifications.map((notice) => (

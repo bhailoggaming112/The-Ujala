@@ -105,7 +105,7 @@ export type SmsLogEntry = {
   class_name: string | null;
   section_name: string | null;
   parent_phone: string | null;
-  message_type: string;
+  message_type: AlertNoticeType;
   message_body: string | null;
   status: SmsLogStatus;
   provider_response: string | null;
@@ -141,9 +141,15 @@ export type NoticeTemplate = {
   updated_at?: string;
 };
 
+// A register mark that reaches parents: absent, on leave, or late.
+export type AbsenteeAlertStatus = 'absent' | 'leave' | 'late';
+
+// Each alert kind keeps its own saved wording, one row per kind and language.
+export type AlertNoticeType = 'absentee_alert' | 'leave_alert' | 'late_alert';
+
 export type AbsenteeTemplate = {
   id?: string;
-  notice_type: 'absentee_alert';
+  notice_type: AlertNoticeType;
   language: 'English' | 'Urdu';
   template_text: string;
   updated_at?: string;
@@ -159,6 +165,7 @@ export type AbsenteeQueueEntry = {
   section_name: string | null;
   parent_phone: string | null;
   attendance_date: string;
+  attendance_status: AbsenteeAlertStatus;
   language: 'English' | 'Urdu';
   message_body: string | null;
   status: AbsenteeQueueStatus;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock, RefreshCw, Send, XCircle } from 'lucide-react';
 import { fetchSmsLog, updateSmsStatus, type SmsLogFilters } from '@/lib/smsLog';
 import type { SmsLogEntry, SmsLogStatus } from '@/lib/schoolTypes';
+import { ALERT_NOTICE_TYPES, ALERT_STATUSES, ALERT_STATUS_LABELS, statusForNoticeType } from '@/lib/alertStatuses';
 
 const statusMeta: Record<SmsLogStatus, { label: string; icon: typeof CheckCircle2 }> = {
   sent: { label: 'Sent', icon: CheckCircle2 },
@@ -16,10 +17,12 @@ const statusOptions: { value: SmsLogStatus | ''; label: string }[] = [
   { value: 'failed', label: 'Failed' },
 ];
 
+const EMPTY_FILTERS: SmsLogFilters = { date: '', status: '', alertStatus: '' };
+
 const formatStamp = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
-  const [filters, setFilters] = useState<SmsLogFilters>({ date: '', status: '' });
+  const [filters, setFilters] = useState<SmsLogFilters>(EMPTY_FILTERS);
   const [entries, setEntries] = useState<SmsLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +61,12 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
     failed: visible.filter((entry) => entry.status === 'failed').length,
   }), [visible]);
 
+  // How many Absent, Leave and Late alerts are in the rows currently on screen.
+  const alertCounts = useMemo(() => ALERT_STATUSES.reduce((accumulator, key) => {
+    accumulator[key] = visible.filter((entry) => entry.message_type === ALERT_NOTICE_TYPES[key]).length;
+    return accumulator;
+  }, {} as Record<(typeof ALERT_STATUSES)[number], number>), [visible]);
+
   const retry = async (entry: SmsLogEntry) => {
     setBusyIds((current) => [...current, entry.id]);
     const updateError = await updateSmsStatus([entry.id], 'sent');
@@ -74,7 +83,7 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
           <label className="control-field">Report date
             <input type="date" value={filters.date} onChange={(event) => setFilters((current) => ({ ...current, date: event.target.value }))} />
           </label>
-          <label className="control-field">Status
+          <label className="control-field">Delivery status
             <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as SmsLogStatus | '' }))}>
               {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
@@ -82,8 +91,30 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
           <label className="control-field">Search
             <input value={notice} onChange={(event) => setNotice(event.target.value)} placeholder="Student, number or message" />
           </label>
-          <button type="button" className="secondary-button" onClick={() => { setFilters({ date: '', status: '' }); setNotice(''); }}><RefreshCw size={15} /> Clear filters</button>
+          <button type="button" className="secondary-button" onClick={() => { setFilters(EMPTY_FILTERS); setNotice(''); }}><RefreshCw size={15} /> Clear filters</button>
         </div>
+
+        <div className="sms-alert-filters">
+          <span className="sms-day-label">Alert type</span>
+          <button
+            type="button"
+            className={`sms-alert-filter ${filters.alertStatus === '' ? 'on' : ''}`}
+            onClick={() => setFilters((current) => ({ ...current, alertStatus: '' }))}
+          >
+            All alerts
+          </button>
+          {ALERT_STATUSES.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`sms-alert-filter ${key} ${filters.alertStatus === key ? 'on' : ''}`}
+              onClick={() => setFilters((current) => ({ ...current, alertStatus: key }))}
+            >
+              {ALERT_STATUS_LABELS[key]} {alertCounts[key]}
+            </button>
+          ))}
+        </div>
+
         <div className="sms-report-summary">
           <span className="sms-chip total"><Send size={14} /> {counts.total} logged</span>
           <span className="sms-chip sent"><CheckCircle2 size={14} /> {counts.sent} sent</span>
@@ -106,16 +137,17 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
 
       <div className="panel roster-panel">
         <div className="table-wrap">
-          <table className="min-w-[980px]">
+          <table className="min-w-[1040px]">
             <thead>
               <tr>
                 <th>Student</th>
+                <th>Alert</th>
                 <th>Class / Section</th>
                 <th>Attendance date</th>
                 <th>Parent number</th>
-                <th>Message type</th>
+                <th>Message</th>
                 <th>Attachment</th>
-                <th>Status</th>
+                <th>Delivery</th>
                 <th>Timestamp</th>
                 <th />
               </tr>
@@ -124,13 +156,16 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
               {visible.map((entry) => {
                 const meta = statusMeta[entry.status] ?? statusMeta.pending;
                 const StatusIcon = meta.icon;
+                const alertStatus = statusForNoticeType(entry.message_type);
+                const alertLabel = alertStatus ? ALERT_STATUS_LABELS[alertStatus] : entry.message_type.replace(/_/g, ' ');
                 return (
                   <tr key={entry.id}>
                     <td><strong>{entry.student_name}</strong></td>
+                    <td><span className={`alert-badge ${alertStatus ?? 'other'}`}>{alertLabel}</span></td>
                     <td>{entry.class_name ? `${entry.class_name} · ${entry.section_name ?? '—'}` : '—'}</td>
                     <td className="muted-cell">{entry.attendance_date ? formatStamp(`${entry.attendance_date}T00:00:00`) : '—'}</td>
                     <td>{entry.parent_phone || '—'}</td>
-                    <td><span className="sms-type">{entry.message_type.replace(/_/g, ' ')}</span></td>
+                    <td className="sms-body">{entry.message_body || '—'}</td>
                     <td>
                       {entry.attachment_url
                         ? <a className="sms-attachment" href={entry.attachment_url} target="_blank" rel="noreferrer">{entry.attachment_name || 'Attachment'}</a>
@@ -161,7 +196,7 @@ export function SmsReport({ onToast }: { onToast: (message: string) => void }) {
             <div className="empty-state large">
               <CalendarDays size={20} />
               {entries.length === 0
-                ? 'No WhatsApp alerts logged for these filters yet. Send absentee alerts from the Send Absentee WhatsApp SMS view and they will appear here.'
+                ? 'No WhatsApp alerts logged for these filters yet. Send attendance alerts from the Send Absentee WhatsApp SMS view and they will appear here.'
                 : 'No alert matches that search.'}
             </div>
           )}

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
-import type { SmsLogEntry, SmsLogStatus } from '@/lib/schoolTypes';
+import { ALERT_NOTICE_TYPES } from '@/lib/alertStatuses';
+import type { AbsenteeAlertStatus, AlertNoticeType, SmsLogEntry, SmsLogStatus } from '@/lib/schoolTypes';
 
 // The caller supplies what the alert is about; the status is always recorded as
 // pending first so a send that fails is still visible in the report.
@@ -9,7 +10,7 @@ export type NewSmsLogEntry = {
   class_name: string | null;
   section_name: string | null;
   parent_phone: string | null;
-  message_type: string;
+  message_type: AlertNoticeType;
   message_body: string;
   attendance_date: string;
   attachment_url?: string | null;
@@ -19,13 +20,14 @@ export type NewSmsLogEntry = {
 const SMS_LOG_COLUMNS =
   'id, student_id, student_name, class_name, section_name, parent_phone, message_type, message_body, status, provider_response, attendance_date, sent_at, created_at, attachment_url, attachment_name';
 
-export type SmsLogFilters = { date: string; status: SmsLogStatus | '' };
+export type SmsLogFilters = { date: string; status: SmsLogStatus | ''; alertStatus: AbsenteeAlertStatus | '' };
 
 export async function fetchSmsLog(filters: SmsLogFilters): Promise<{ entries: SmsLogEntry[]; error: string | null }> {
   try {
     let query = supabase.from('school_sms_log').select(SMS_LOG_COLUMNS).order('created_at', { ascending: false }).limit(500);
     if (filters.date) query = query.eq('attendance_date', filters.date);
     if (filters.status) query = query.eq('status', filters.status);
+    if (filters.alertStatus) query = query.eq('message_type', ALERT_NOTICE_TYPES[filters.alertStatus]);
     const { data, error } = await query;
     if (error) return { entries: [], error: error.message };
     return { entries: (data ?? []) as SmsLogEntry[], error: null };

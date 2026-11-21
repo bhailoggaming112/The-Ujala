@@ -1429,8 +1429,36 @@ input[dir="rtl"]:focus {
 .parent-notice-child { display: inline-block; margin-top: 2px; font-size: 12px; font-weight: 600; color: #3f6fa8; }
 .parent-notice p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: #4a6272; }
 
+/* Which WhatsApp the chats open in: Web in one reused tab, or the Desktop app */
+.absentee-sendmode { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid #eaf2f7; }
+.absentee-sendmode-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5d849b; }
+.absentee-sendmode .segmented-control button { display: inline-flex; align-items: center; gap: 6px; }
+.absentee-sendmode-hint { color: #61798a; font-size: 12px; }
+
+.absentee-template-pickers { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* The register mark that raised the alert, shown beside the student */
+.alert-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+.alert-badge.absent { background: #fff0eb; color: #c15a4c; }
+.alert-badge.leave { background: #eef4fa; color: #38688f; }
+.alert-badge.late { background: #fff6db; color: #9d7220; }
+.alert-badge.other { background: #f2f7f9; color: #6b8593; }
+
+/* Filter pills: the alert list and the report can both be narrowed to one status */
+.absentee-status-filter, .sms-alert-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sms-alert-filters { margin-top: 16px; padding-top: 14px; border-top: 1px solid #edf2f4; }
+.absentee-filter-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5d849b; }
+.absentee-filter, .sms-alert-filter { border: 1px solid #dfeaec; background: #fff; color: #718794; border-radius: 999px; padding: 6px 13px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, color 160ms ease; }
+.absentee-filter:hover, .sms-alert-filter:hover { border-color: #8fc9d7; color: #378ba6; }
+.absentee-filter.on, .sms-alert-filter.on { border-color: #50abc2; background: #e9f7fa; color: #247790; box-shadow: inset 0 0 0 1px #50abc2; }
+.absentee-filter.absent.on, .sms-alert-filter.absent.on { border-color: #e9a596; background: #fff0eb; color: #b0483a; box-shadow: inset 0 0 0 1px #e9a596; }
+.absentee-filter.leave.on, .sms-alert-filter.leave.on { border-color: #a9c6dd; background: #eef4fa; color: #2f5f85; box-shadow: inset 0 0 0 1px #a9c6dd; }
+.absentee-filter.late.on, .sms-alert-filter.late.on { border-color: #e2c37e; background: #fff6db; color: #8f6416; box-shadow: inset 0 0 0 1px #e2c37e; }
+
+.sms-body { max-width: 300px; font-size: 12px; color: #4a6272; line-height: 1.5; }
+
 @media print {
-  .absentee-panel, .sms-day-strip { display: none !important; }
+  .absentee-panel, .sms-day-strip, .absentee-status-filter, .absentee-sendmode { display: none !important; }
 }
 
 /* ===========================================================

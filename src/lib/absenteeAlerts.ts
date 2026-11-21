@@ -1,18 +1,20 @@
 import { supabase } from '@/lib/supabase';
-import type { AbsenteeQueueEntry, AbsenteeTemplate, PortalNotification, Student } from '@/lib/schoolTypes';
+import type { AbsenteeAlertStatus, AbsenteeQueueEntry, AbsenteeTemplate, PortalNotification, Student } from '@/lib/schoolTypes';
 import { renderAbsenteeText } from '@/lib/noticeText';
-import { pickWhatsAppContact } from '@/lib/whatsapp';
+import { ALERT_NOTICE_TYPES, ALERT_NOTICE_TYPE_LIST, ALERT_STATUSES, alertWordingFrom, isAlertStatus } from '@/lib/alertStatuses';
+import { pickWhatsAppContact, type AlertSendMode } from '@/lib/whatsapp';
 
 const QUEUE_COLUMNS =
-  'id, student_id, student_name, class_name, section_name, parent_phone, attendance_date, language, message_body, status, sent_at, created_at, attachment_url, attachment_name';
+  'id, student_id, student_name, class_name, section_name, parent_phone, attendance_date, attendance_status, language, message_body, status, sent_at, created_at, attachment_url, attachment_name';
 
 // The register only needs the handful of fields an alert uses, so the row is typed
-// narrowly instead of pretending it is a full student record.
+// narrowly instead of pretending it is a full student record. `attendance_status` comes
+// from the attendance row itself, not from the student record.
 export type AbsentStudent = Pick<
   Student,
   'id' | 'full_name' | 'class_name' | 'section_name' | 'status'
   | 'messaging_number' | 'father_contact_number' | 'whatsapp_number'
->;
+> & { attendance_status: string | null };
 
 // The queue stores the number exactly as it will be dialled, taken from the student's
 // WhatsApp Number whenever one is saved.
@@ -20,42 +22,46 @@ const alertNumber = (student: AbsentStudent) => pickWhatsAppContact(student).num
 
 export function buildAbsenteeEntries(
   language: AbsenteeTemplate['language'],
-  templateText: string,
+  wordingByStatus: Record<AbsenteeAlertStatus, string>,
   roster: AbsentStudent[],
   forDate: string,
   attachment?: { url: string; name: string } | null,
 ): NewAbsenteeEntry[] {
-  return roster.map((student) => ({
-    student_id: student.id,
-    student_name: student.full_name,
-    class_name: student.class_name,
-    section_name: student.section_name,
-    parent_phone: alertNumber(student),
-    attendance_date: forDate,
-    language,
-    message_body: renderAbsenteeText(templateText, {
+  return roster.map((student) => {
+    const status: AbsenteeAlertStatus = isAlertStatus(student.attendance_status) ? student.attendance_status : 'absent';
+    return {
+      student_id: student.id,
       student_name: student.full_name,
       class_name: student.class_name,
       section_name: student.section_name,
-      date: forDate,
-    }),
-    attachment_url: attachment?.url ?? null,
-    attachment_name: attachment?.name ?? null,
-  }));
+      parent_phone: alertNumber(student),
+      attendance_date: forDate,
+      attendance_status: status,
+      language,
+      message_body: renderAbsenteeText(wordingByStatus[status], {
+        student_name: student.full_name,
+        class_name: student.class_name,
+        section_name: student.section_name,
+        date: forDate,
+      }),
+      attachment_url: attachment?.url ?? null,
+      attachment_name: attachment?.name ?? null,
+    };
+  });
 }
 
-// Every absence saved for the date, across all classes and sections, so the office
-// can work through a whole day in one pass.
+// Every absence, leave and late arrival saved for the date, across all classes and
+// sections, so the office can work through a whole day in one pass.
 export async function fetchAbsentStudentsForDate(forDate: string): Promise<{ students: AbsentStudent[]; error: string | null }> {
   try {
     const { data, error } = await supabase
       .from('school_attendance')
-      .select('student_id, student:school_students(id, full_name, class_name, section_name, status, messaging_number, father_contact_number, whatsapp_number)')
+      .select('student_id, status, student:school_students(id, full_name, class_name, section_name, status, messaging_number, father_contact_number, whatsapp_number)')
       .eq('attendance_date', forDate)
-      .eq('status', 'absent');
+      .in('status', ALERT_STATUSES);
     if (error) return { students: [], error: error.message };
-    const rows = (data ?? []) as unknown as { student_id: string; student: AbsentStudent | null }[];
-    const students = rows.flatMap((row) => (row.student ? [row.student] : []))
+    const rows = (data ?? []) as unknown as { student_id: string; status: string | null; student: Omit<AbsentStudent, 'attendance_status'> | null }[];
+    const students = rows.flatMap((row) => (row.student ? [{ ...row.student, attendance_status: row.status }] : []))
       .filter((student) => student.status !== 'withdrawn');
     return { students, error: null };
   } catch {
@@ -63,9 +69,10 @@ export async function fetchAbsentStudentsForDate(forDate: string): Promise<{ stu
   }
 }
 
-// Called after the register is saved: pulls the saved absences for the day into the
-// alert list using the school's current wording. Adding a row is what raises the
-// parent portal absence notice, so saving the register notifies parents on its own.
+// Called after the register is saved: pulls the saved absences, leave days and late
+// arrivals for the day into the alert list, each worded by its own template. Adding a
+// row is what raises the parent portal notice, so saving the register notifies parents
+// on its own.
 export async function syncAbsenteesForDate(forDate: string): Promise<string | null> {
   const [language, templates, roster] = await Promise.all([
     fetchAbsenteeLanguage(),
@@ -73,14 +80,16 @@ export async function syncAbsenteesForDate(forDate: string): Promise<string | nu
     fetchAbsentStudentsForDate(forDate),
   ]);
   if (roster.error) return roster.error;
+  if (roster.students.length === 0) return null;
 
-  const saved = templates.error
-    ? ''
-    : (templates.templates.find((template) => template.language === language)?.template_text ?? '');
-  if (!saved.trim()) return null;
+  const wording = alertWordingFrom(templates.error ? [] : templates.templates);
+  const wordingByStatus = ALERT_STATUSES.reduce((accumulator, status) => {
+    accumulator[status] = wording[status][language];
+    return accumulator;
+  }, {} as Record<AbsenteeAlertStatus, string>);
 
   const result = await syncAbsentees(
-    buildAbsenteeEntries(language, saved, roster.students, forDate),
+    buildAbsenteeEntries(language, wordingByStatus, roster.students, forDate),
     roster.students.map((student) => student.id),
     forDate,
   );
@@ -94,6 +103,7 @@ export type NewAbsenteeEntry = {
   section_name: string | null;
   parent_phone: string | null;
   attendance_date: string;
+  attendance_status: AbsenteeAlertStatus;
   language: AbsenteeTemplate['language'];
   message_body: string;
   attachment_url?: string | null;
@@ -136,7 +146,8 @@ export async function syncAbsentees(
     return saved?.status === 'queued'
       && (saved.message_body !== entry.message_body
         || saved.language !== entry.language
-        || saved.parent_phone !== entry.parent_phone);
+        || saved.parent_phone !== entry.parent_phone
+        || saved.attendance_status !== entry.attendance_status);
   });
 
   try {
@@ -153,7 +164,12 @@ export async function syncAbsentees(
         const saved = byStudent.get(entry.student_id);
         return supabase
           .from('school_absentee_queue')
-          .update({ language: entry.language, message_body: entry.message_body, parent_phone: entry.parent_phone })
+          .update({
+            language: entry.language,
+            message_body: entry.message_body,
+            parent_phone: entry.parent_phone,
+            attendance_status: entry.attendance_status,
+          })
           .eq('id', saved?.id ?? '');
       }));
       const failed = results.find((result) => result.error);
@@ -196,7 +212,7 @@ export async function fetchAbsenteeTemplates(): Promise<{ templates: AbsenteeTem
     const { data, error } = await supabase
       .from('school_notice_templates')
       .select('id, notice_type, language, template_text, updated_at')
-      .eq('notice_type', 'absentee_alert');
+      .in('notice_type', ALERT_NOTICE_TYPE_LIST);
     if (error) return { templates: [], error: error.message };
     return { templates: (data ?? []) as AbsenteeTemplate[], error: null };
   } catch {
@@ -205,6 +221,7 @@ export async function fetchAbsenteeTemplates(): Promise<{ templates: AbsenteeTem
 }
 
 export async function saveAbsenteeTemplate(
+  status: AbsenteeAlertStatus,
   language: AbsenteeTemplate['language'],
   templateText: string,
 ): Promise<string | null> {
@@ -212,7 +229,12 @@ export async function saveAbsenteeTemplate(
     const { error } = await supabase
       .from('school_notice_templates')
       .upsert(
-        { notice_type: 'absentee_alert', language, template_text: templateText, updated_at: new Date().toISOString() },
+        {
+          notice_type: ALERT_NOTICE_TYPES[status],
+          language,
+          template_text: templateText,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: 'notice_type,language' },
       );
     return error ? error.message : null;
@@ -221,8 +243,8 @@ export async function saveAbsenteeTemplate(
   }
 }
 
-// The chosen language is one setting shared by the whole school, so it is stored
-// server-side rather than in the browser.
+// The chosen language and the way WhatsApp is opened are school-wide settings, so they
+// are stored server-side rather than in the browser.
 export async function fetchAbsenteeLanguage(): Promise<AbsenteeTemplate['language']> {
   try {
     const { data } = await supabase
@@ -245,6 +267,30 @@ export async function saveAbsenteeLanguage(language: AbsenteeTemplate['language'
     return error ? error.message : null;
   } catch {
     return 'The chosen language could not be saved.';
+  }
+}
+
+export async function fetchAbsenteeSendMode(): Promise<AlertSendMode> {
+  try {
+    const { data } = await supabase
+      .from('school_absentee_settings')
+      .select('send_mode')
+      .eq('id', 'default')
+      .maybeSingle();
+    return (data as { send_mode: string | null } | null)?.send_mode === 'desktop' ? 'desktop' : 'web';
+  } catch {
+    return 'web';
+  }
+}
+
+export async function saveAbsenteeSendMode(sendMode: AlertSendMode): Promise<string | null> {
+  try {
+    const { error } = await supabase
+      .from('school_absentee_settings')
+      .upsert({ id: 'default', send_mode: sendMode, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    return error ? error.message : null;
+  } catch {
+    return 'The WhatsApp sending option could not be saved.';
   }
 }
 

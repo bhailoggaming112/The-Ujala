@@ -237,7 +237,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
     const syncError = await syncAbsenteesForDate(date);
     onToast(syncError
       ? `Attendance saved for ${activeClass} · Section ${shownSection}. The absentee list could not be refreshed.`
-      : `Attendance saved for ${activeClass} · Section ${shownSection}. Absent parents have been notified in the portal.`);
+      : `Attendance saved for ${activeClass} · Section ${shownSection}. Parents have been notified in the portal for absences, leave and late arrivals.`);
   };
 
   const deleteAttendance = async () => {
