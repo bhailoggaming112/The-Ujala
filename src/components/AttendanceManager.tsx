@@ -1,22 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  CalendarCheck2, Check, CheckCheck, FileBadge2, Filter, MessageCircle, Printer, RotateCcw, Save, Trash2, UserX, Users, X,
+  CalendarCheck2, CalendarDays, Check, CheckCheck, FileBadge2, Filter, MessageCircle, Printer, RotateCcw, Save, Search,
+  Trash2, UserX, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Student } from '@/lib/schoolTypes';
 import { StudentPhoto } from '@/components/StudentPhoto';
 import { SmsReport } from '@/components/SmsReport';
 import { DmcSheet } from '@/components/DmcSheet';
+import { DailyOverviewPanel, MonthlyReportPanel, type ClassSubmission } from '@/components/AttendanceOverviewPanels';
+import { SchoolCalendarSettings } from '@/components/SchoolCalendarSettings';
 import { createDmcDraft, createMarksRows, type DmcDraft, type DmcMarksRow } from '@/lib/dmc';
 import { SCHOOL_NAME, SCHOOL_NAME_UR, renderNoticeText } from '@/lib/noticeText';
 import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
+import { loadSchoolCalendar, removeCalendarDay, saveCalendarDay, saveCalendarPolicy } from '@/lib/schoolCalendar';
+import { useAuth } from '@/lib/auth';
 import {
-  attendancePercentage, formatPercentage, monthStart, summariseAttendance, todayKey,
-  type AttendanceRecord, type AttendanceSummary, type AttendanceStatus,
+  DEFAULT_CALENDAR_POLICY, attendancePercentage, countByStatus, formatPercentage, monthStart, summariseAttendance, todayKey,
+  type AttendanceRecord, type AttendanceStatus, type AttendanceSummary, type CalendarDay, type CalendarDayType, type CalendarPolicy,
 } from '@/lib/attendance';
 
 type SectionKey = { class_name: string; section_name: string };
-type Tab = 'register' | 'dmc' | 'sms';
+type Tab = 'register' | 'calendar' | 'monthly' | 'dmc' | 'sms';
 type Language = 'English' | 'Urdu';
 
 const classOptions = ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10'];
@@ -25,6 +30,7 @@ const statusMeta: { value: AttendanceStatus; label: string }[] = [
   { value: 'present', label: 'Present' },
   { value: 'absent', label: 'Absent' },
   { value: 'late', label: 'Late' },
+  { value: 'leave', label: 'Leave' },
 ];
 
 // Used when the school has not saved its own absentee wording yet.
@@ -36,7 +42,9 @@ const DEFAULT_ABSENTEE_TEMPLATE: Record<Language, string> = {
 const absenteeHeading = (language: Language) => language === 'Urdu' ? SCHOOL_NAME_UR : SCHOOL_NAME;
 
 const tabs: { value: Tab; label: string; icon: typeof CalendarCheck2 }[] = [
-  { value: 'register', label: 'Daily Register', icon: CalendarCheck2 },
+  { value: 'register', label: 'Daily Attendance', icon: CalendarCheck2 },
+  { value: 'calendar', label: 'Calendar & Policy', icon: CalendarDays },
+  { value: 'monthly', label: 'Monthly Report', icon: Filter },
   { value: 'dmc', label: 'DMC', icon: FileBadge2 },
   { value: 'sms', label: 'SMS Report', icon: MessageCircle },
 ];
@@ -46,7 +54,15 @@ const parseCount = (value: string) => {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : 0;
 };
 
+const dayKey = (value: string) => value.slice(0, 10);
+
+type PendingDayChange = {
+  date: string;
+  entry: { day_date: string; day_type: CalendarDayType; title: string; notes?: string | null } | null;
+};
+
 export function AttendanceManager({ students, onToast }: { students: Student[]; onToast: (message: string) => void }) {
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('register');
   const today = todayKey();
   const [date, setDate] = useState(today);
@@ -54,6 +70,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
   const [selectedSection, setSelectedSection] = useState('');
   const [filterNotTaken, setFilterNotTaken] = useState(false);
   const [absenteesOnly, setAbsenteesOnly] = useState(false);
+  const [rosterQuery, setRosterQuery] = useState('');
   const [storedMarks, setStoredMarks] = useState<Map<string, string>>(new Map());
   const [draft, setDraft] = useState<Record<string, AttendanceStatus>>({});
   const [saving, setSaving] = useState(false);
@@ -62,6 +79,24 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
   const [smsLanguage, setSmsLanguage] = useState<Language>('English');
   const [sendingSms, setSendingSms] = useState(false);
   const [alertedIds, setAlertedIds] = useState<string[]>([]);
+
+  const [policy, setPolicy] = useState<CalendarPolicy>(DEFAULT_CALENDAR_POLICY);
+  const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [pendingDays, setPendingDays] = useState<PendingDayChange[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const loaded = await loadSchoolCalendar();
+      if (cancelled) return;
+      setPolicy(loaded.policy);
+      setCalendarDays(loaded.days);
+      setCalendarError(loaded.error);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const distinctSections = useMemo(() => {
     const map = new Map<string, SectionKey>();
@@ -121,20 +156,42 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
   );
 
   const counts = useMemo(() => {
-    let marked = 0;
-    let present = 0;
-    let absent = 0;
-    for (const student of sectionStudents) {
-      const status = statusOf(student.id);
-      if (!status) continue;
-      marked += 1;
-      if (status === 'absent') absent += 1;
-      else present += 1;
-    }
-    return { total: sectionStudents.length, marked, present, absent, remaining: sectionStudents.length - marked };
+    const marked = countByStatus(sectionStudents.map((student) => statusOf(student.id)).filter(Boolean) as string[]);
+    return {
+      total: sectionStudents.length,
+      marked: marked.marked,
+      present: marked.present + marked.late,
+      absent: marked.absent,
+      late: marked.late,
+      leave: marked.leave,
+      remaining: sectionStudents.length - marked.marked,
+    };
   }, [sectionStudents, statusOf]);
 
-  const shownStudents = absenteesOnly ? absentees : sectionStudents;
+  // One row per class group for the selected date, used by the overview panel.
+  const submissions = useMemo<ClassSubmission[]>(() => distinctSections.map((section) => {
+    const list = students.filter((s) => s.class_name === section.class_name && s.section_name === section.section_name);
+    const marks = list.map((student) => storedMarks.get(student.id)).filter(Boolean) as string[];
+    const tally = countByStatus(marks);
+    return {
+      key: `${section.class_name}|||${section.section_name}`,
+      class_name: section.class_name,
+      section_name: section.section_name,
+      total: list.length,
+      marked: tally.marked,
+      present: tally.present,
+      absent: tally.absent,
+      late: tally.late,
+      leave: tally.leave,
+      complete: list.length > 0 && tally.marked === list.length,
+    };
+  }), [distinctSections, students, storedMarks]);
+
+  const term = rosterQuery.trim().toLowerCase();
+  const shownStudents = (absenteesOnly ? absentees : sectionStudents)
+    .filter((student) => !term
+      || student.full_name.toLowerCase().includes(term)
+      || student.admission_number.toLowerCase().includes(term));
 
   const setMark = (id: string, status: AttendanceStatus) => setDraft((current) => ({ ...current, [id]: status }));
 
@@ -145,7 +202,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
       for (const student of shownStudents) next[student.id] = 'present';
       return next;
     });
-    onToast(`${shownStudents.length} students marked present. Tap Absent or Late on anyone who is away, then save.`);
+    onToast(`${shownStudents.length} students marked present. Tap Absent, Late or Leave on anyone who is away, then save.`);
   };
 
   const resetDraft = () => {
@@ -182,6 +239,77 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
     onToast(`Attendance cleared for ${activeClass} · Section ${shownSection}`);
     setDraft({});
     await loadAttendance(date);
+  };
+
+  const pickClass = (className: string, sectionName: string) => {
+    setSelectedClass(className);
+    setSelectedSection(sectionName);
+    setAbsenteesOnly(false);
+    setFilterNotTaken(false);
+    onToast(`Register opened for ${className} · Section ${sectionName}.`);
+  };
+
+  // Calendar edits are held locally and written when the policy is saved, so a
+  // stray tap never changes how attendance is counted until it is confirmed.
+  const toggleCalendarDate = (value: string) => {
+    const existing = calendarDays.find((day) => dayKey(day.day_date) === value);
+    if (existing) {
+      setCalendarDays((current) => current.filter((day) => dayKey(day.day_date) !== value));
+      setPendingDays((current) => [...current.filter((item) => item.date !== value), { date: value, entry: null }]);
+      onToast(`${value} reopened as a school day. Save the policy to keep this.`);
+      return;
+    }
+    const entry = { day_date: value, day_type: 'holiday' as const, title: 'School off', notes: null };
+    setCalendarDays((current) => [...current, { id: `pending-${value}`, ...entry }]);
+    setPendingDays((current) => [...current.filter((item) => item.date !== value), { date: value, entry }]);
+    onToast(`${value} marked as an off day. Save the policy to keep this.`);
+  };
+
+  const addCalendarEntry = (entry: { day_date: string; day_type: CalendarDayType; title: string; notes?: string | null }) => {
+    setCalendarDays((current) => [
+      ...current.filter((day) => dayKey(day.day_date) !== entry.day_date),
+      {
+        id: `pending-${entry.day_date}`,
+        day_date: entry.day_date,
+        day_type: entry.day_type,
+        title: entry.title.trim() || 'School closed',
+        notes: entry.notes?.trim() ? entry.notes.trim() : null,
+      },
+    ]);
+    setPendingDays((current) => [...current.filter((item) => item.date !== entry.day_date), { date: entry.day_date, entry }]);
+    onToast(`${entry.title.trim() || 'Date'} added to the calendar. Save the policy to keep this.`);
+  };
+
+  const removeCalendarEntry = (value: string) => {
+    setCalendarDays((current) => current.filter((day) => dayKey(day.day_date) !== value));
+    setPendingDays((current) => [...current.filter((item) => item.date !== value), { date: value, entry: null }]);
+    onToast('Date removed from the calendar. Save the policy to keep this.');
+  };
+
+  const savePolicy = async () => {
+    if (calendarError) {
+      onToast('The saved calendar could not be loaded, so nothing was saved. Reload the page and try again.');
+      return;
+    }
+    setSavingPolicy(true);
+    const policyError = await saveCalendarPolicy(policy, user?.id ?? null);
+    if (policyError) { setSavingPolicy(false); onToast(policyError); return; }
+
+    for (const change of pendingDays) {
+      const dayError = change.entry
+        ? await saveCalendarDay(change.entry, user?.id ?? null)
+        : await removeCalendarDay(change.date);
+      if (dayError) { setSavingPolicy(false); onToast(dayError); return; }
+    }
+    setPendingDays([]);
+
+    const reloaded = await loadSchoolCalendar();
+    if (!reloaded.error) {
+      setPolicy(reloaded.policy);
+      setCalendarDays(reloaded.days);
+    }
+    setSavingPolicy(false);
+    onToast('School working schedule and calendar saved.');
   };
 
   const loadTemplate = async (language: Language) => {
@@ -250,6 +378,16 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
 
       {tab === 'register' && (
         <>
+          <DailyOverviewPanel
+            date={date}
+            onDateChange={setDate}
+            submissions={submissions}
+            calendarDays={calendarDays}
+            workingDays={policy.working_days}
+            onPickClass={pickClass}
+            onToggleCalendarDate={toggleCalendarDate}
+          />
+
           <div className="panel attendance-filters-panel">
             <div className="att-filters">
               <label className="control-field">Attendance Date
@@ -293,21 +431,7 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
                   <RotateCcw size={15} /> Reset marks
                 </button>
               </div>
-              <p className="att-quick-hint">Mark everyone present in one tap, then click Absent or Late on the students who are away before saving.</p>
-            </div>
-
-            <div className="att-summary">
-              <div className="search-field">
-                <Users size={18} />
-                <span className="result-count">
-                  Total <b>{counts.total}</b> · Marked <b>{counts.marked}</b> · Present <b>{counts.present}</b> · Absent <b>{counts.absent}</b> · Remaining <b>{counts.remaining}</b>
-                </span>
-              </div>
-              <div className="att-actions">
-                <button className="primary-button" onClick={() => setConfirm('save')} disabled={saving || counts.marked === 0}><Save size={16} /> Save</button>
-                <button className="secondary-button" onClick={() => window.print()}><Printer size={16} /> Print</button>
-                <button className="secondary-button danger" onClick={() => setConfirm('delete')} disabled={sectionStudents.length === 0}><Trash2 size={16} /> Delete</button>
-              </div>
+              <p className="att-quick-hint">Mark everyone present in one tap, then click Absent, Late or Leave on the students who are away before saving.</p>
             </div>
           </div>
 
@@ -341,6 +465,60 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
           </div>
 
           <div className="panel roster-panel section-students-panel">
+            <div className="att-roster-head">
+              <div className="att-roster-stats">
+                <div className="att-roster-stat">
+                  <span>Total Class</span>
+                  <strong>{counts.total}</strong>
+                </div>
+                <div className="att-roster-stat present">
+                  <span>Present</span>
+                  <strong>{counts.present}</strong>
+                </div>
+                <div className="att-roster-stat absent">
+                  <span>Absent</span>
+                  <strong>{counts.absent}</strong>
+                </div>
+                <div className="att-roster-stat late">
+                  <span>Late</span>
+                  <strong>{counts.late}</strong>
+                </div>
+                <div className="att-roster-stat leave">
+                  <span>Leave</span>
+                  <strong>{counts.leave}</strong>
+                </div>
+              </div>
+              <div className="att-roster-actions">
+                <div className="search-field">
+                  <Search size={18} />
+                  <input
+                    value={rosterQuery}
+                    onChange={(event) => setRosterQuery(event.target.value)}
+                    placeholder="Search student in this section"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => setConfirm('save')}
+                  disabled={saving || counts.marked === 0}
+                >
+                  <Save size={16} /> Save &amp; Update Attendance
+                </button>
+              </div>
+            </div>
+
+            <div className="att-summary">
+              <span className="result-count">
+                Marked <b>{counts.marked}</b> of <b>{counts.total}</b> · Remaining <b>{counts.remaining}</b>
+                {rosterQuery.trim() && <> · Showing <b>{shownStudents.length}</b></>}
+              </span>
+              <div className="att-actions">
+                <button className="secondary-button" onClick={() => window.print()}><Printer size={16} /> Print</button>
+                <button className="secondary-button danger" onClick={() => setConfirm('delete')} disabled={sectionStudents.length === 0}><Trash2 size={16} /> Delete</button>
+              </div>
+            </div>
+
             <div className="table-wrap">
               <table>
                 <thead>
@@ -386,16 +564,39 @@ export function AttendanceManager({ students, onToast }: { students: Student[]; 
               </table>
               {shownStudents.length === 0 && (
                 <div className="empty-state large">
-                  {absenteesOnly
-                    ? 'No absentees in this section for this date. Everyone is present.'
-                    : visibleSections.length === 0
-                      ? 'All sections have been marked for this date.'
-                      : 'No students in this section yet.'}
+                  {term
+                    ? 'No student in this section matches that search.'
+                    : absenteesOnly
+                      ? 'No absentees in this section for this date. Everyone is present.'
+                      : visibleSections.length === 0
+                        ? 'All sections have been marked for this date.'
+                        : 'No students in this section yet.'}
                 </div>
               )}
             </div>
           </div>
         </>
+      )}
+
+      {tab === 'calendar' && (
+        <SchoolCalendarSettings
+          policy={policy}
+          days={calendarDays}
+          saving={savingPolicy}
+          onPolicyChange={setPolicy}
+          onSavePolicy={() => void savePolicy()}
+          onAddDay={addCalendarEntry}
+          onRemoveDay={removeCalendarEntry}
+          onToast={onToast}
+        />
+      )}
+
+      {tab === 'monthly' && (
+        <MonthlyReportPanel
+          students={students}
+          policy={policy}
+          calendarDays={calendarDays}
+        />
       )}
 
       {tab === 'dmc' && (
@@ -491,6 +692,7 @@ function DmcPanel({ students, onToast }: { students: Student[]; onToast: (messag
       present: parseCount(manual.present),
       absent: parseCount(manual.absent),
       late: autoSummary.late,
+      leave: autoSummary.leave,
       percentage: attendancePercentage(parseCount(manual.present), parseCount(manual.total)),
     }
     : autoSummary;
@@ -560,7 +762,7 @@ function DmcPanel({ students, onToast }: { students: Student[]; onToast: (messag
                 <span className="eyebrow">Calculated from the register</span>
                 <h2>Attendance summary</h2>
               </div>
-              <span className="dmc-period-note">{range.start} → {range.end} · Sundays excluded</span>
+              <span className="dmc-period-note">{range.start} → {range.end} · school calendar applied</span>
             </div>
 
             <div className="dmc-stat-row">

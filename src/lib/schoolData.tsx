@@ -5,7 +5,7 @@ import { admissionNumberExists } from '@/lib/admissionFormState';
 import { toStudentFeePayload } from '@/lib/admissionFees';
 import type { AdmissionFormState, InformationRecord, Student } from '@/lib/schoolTypes';
 
-export type Attendance = { student_id: string; status: 'present' | 'absent' | 'late' | 'excused' };
+export type Attendance = { student_id: string; status: 'present' | 'absent' | 'late' | 'leave' };
 
 export type AddStudentResult = { ok: boolean; message: string; student?: Student };
 

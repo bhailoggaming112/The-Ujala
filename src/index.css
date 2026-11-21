@@ -774,3 +774,348 @@ input[dir="rtl"]:focus {
   .print-student-record .print-signatures,
   .print-fee-receipt .print-signatures { margin-top: 30px; }
 }
+
+/* ==========================================================================
+   Attendance: leave status, daily overview, monthly report, school calendar
+   Reuses the register's teal/amber/coral palette so the new panels sit inside
+   the existing Daily Attendance tab without looking bolted on.
+   ========================================================================== */
+
+/* --- Leave as a fourth mark, alongside Present / Absent / Late ----------- */
+.att-mark.leave:hover,
+.att-mark.leave.on {
+  color: #3f6fa8;
+  background: #eef4fc;
+  border-color: #c7dbf2;
+}
+.att-cell { font-weight: 700; }
+.att-cell.present { color: #3f8a60; }
+.att-cell.absent { color: #c15a4c; }
+.att-cell.late { color: #a97f22; }
+.att-cell.leave { color: #3f6fa8; }
+
+/* --- Daily Class Attendance Overview ------------------------------------ */
+.att-overview { display: flex; flex-direction: column; gap: 18px; }
+.att-overview-panel { padding: 22px; }
+.att-overview-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.att-overview-date { flex: 0 0 auto; }
+.att-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-top: 20px; }
+.att-stat {
+  border: 1px solid #e6eef2;
+  border-radius: 14px;
+  background: #fbfdfe;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.att-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 22px #294e6317; }
+.att-stat-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; }
+.att-stat-icon.sky { background: #e4f5f8; color: #398ca6; }
+.att-stat-icon.green { background: #e8f7ed; color: #3f8a60; }
+.att-stat-icon.coral { background: #fff0eb; color: #c15a4c; }
+.att-stat-icon.amber { background: #fff6db; color: #a97f22; }
+.att-stat-label { color: #8ea3ad; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
+.att-stat strong { color: #334e5e; font: 800 27px 'Plus Jakarta Sans'; line-height: 1.1; }
+.att-stat strong small { font-size: 13px; color: #93a5af; font-weight: 700; }
+.att-stat-foot { color: #94a5ae; font-size: 10px; }
+.att-stat.present { background: #f2fbf5; border-color: #cdead7; }
+.att-stat.present strong { color: #3f8a60; }
+.att-stat.absent { background: #fff6f3; border-color: #f6d5cc; }
+.att-stat.absent strong { color: #c15a4c; }
+.att-stat.late { background: #fffdf2; border-color: #f1e2b4; }
+.att-stat.late strong { color: #a97f22; }
+
+.att-offday-banner {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #f1e2b4;
+  border-radius: 13px;
+  background: #fffdf2;
+  color: #a97f22;
+}
+.att-offday-banner strong { display: block; color: #6f5c2b; font: 700 13px 'Plus Jakarta Sans'; }
+.att-offday-banner small { display: block; margin-top: 4px; color: #9c8c62; font-size: 11px; line-height: 1.5; }
+
+/* --- Class Submissions --------------------------------------------------- */
+.att-submissions { margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf2f4; }
+.att-submissions-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.att-submissions-head strong, .att-submissions-head small { display: block; }
+.att-submissions-head strong { color: #334e5e; font: 700 15px 'Plus Jakarta Sans'; }
+.att-submissions-head small { margin-top: 3px; color: #94a5ae; font-size: 11px; }
+.att-pills { display: flex; gap: 7px; flex-wrap: wrap; }
+.att-pill {
+  border: 1px solid #dfeaec;
+  background: white;
+  color: #718794;
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  transition: .2s ease;
+}
+.att-pill:hover { border-color: #8fc9d7; color: #378ba6; background: #f4fbfd; }
+.att-pill.on { border-color: #50abc2; color: #247790; background: #e9f7fa; box-shadow: inset 0 0 0 1px #50abc2; }
+
+.att-submission-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 15px; }
+.att-submission {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid #e6eef2;
+  border-radius: 12px;
+  background: #fcfefe;
+  padding: 12px 14px;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background-color .2s ease;
+}
+.att-submission:hover { transform: translateY(-2px); box-shadow: 0 10px 20px #294e6314; border-color: #b8dbe3; }
+.att-submission.done { background: #f6fcf8; border-color: #d6ecdd; }
+.att-submission.pending { background: #fffdf7; border-color: #f2e6c2; }
+.att-submission-name { flex: 1; min-width: 0; }
+.att-submission-name strong, .att-submission-name small { display: block; }
+.att-submission-name strong { color: #3f5767; font-size: 13px; }
+.att-submission-name small { margin-top: 2px; color: #94a5ae; font-size: 10px; }
+.att-submission-marks { display: flex; gap: 5px; }
+.att-submission-marks em { font-style: normal; font-size: 10px; font-weight: 800; border-radius: 6px; padding: 3px 6px; }
+.att-submission-marks em.present { background: #e8f7ed; color: #3f8a60; }
+.att-submission-marks em.absent { background: #fff0eb; color: #c15a4c; }
+.att-submission-marks em.late { background: #fff6db; color: #a97f22; }
+.att-submission-marks em.leave { background: #eef4fc; color: #3f6fa8; }
+.att-submission-state { flex: 0 0 auto; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 5px 10px; white-space: nowrap; }
+.att-submission-state.done { background: #e8f7ed; color: #3f8a60; }
+.att-submission-state.pending { background: #fff6db; color: #a97f22; }
+
+/* --- Register roster header --------------------------------------------- */
+.att-roster-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border-bottom: 1px solid #edf2f4;
+  background: #fcfefe;
+}
+.att-roster-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.att-roster-stat {
+  border: 1px solid #e6eef2;
+  border-radius: 11px;
+  background: #fbfdfe;
+  padding: 9px 13px;
+  min-width: 78px;
+  transition: border-color .2s ease, background-color .2s ease;
+}
+.att-roster-stat span, .att-roster-stat strong { display: block; }
+.att-roster-stat span { color: #8ea3ad; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
+.att-roster-stat strong { margin-top: 5px; color: #334e5e; font: 800 19px 'Plus Jakarta Sans'; }
+.att-roster-stat.present { background: #f2fbf5; border-color: #cdead7; }
+.att-roster-stat.present strong { color: #3f8a60; }
+.att-roster-stat.absent { background: #fff6f3; border-color: #f6d5cc; }
+.att-roster-stat.absent strong { color: #c15a4c; }
+.att-roster-stat.late { background: #fffdf2; border-color: #f1e2b4; }
+.att-roster-stat.late strong { color: #a97f22; }
+.att-roster-stat.leave { background: #f4f8fd; border-color: #d5e3f5; }
+.att-roster-stat.leave strong { color: #3f6fa8; }
+.att-roster-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.att-roster-actions .search-field { width: 300px; }
+
+/* --- Monthly report ------------------------------------------------------ */
+.att-monthly { padding: 22px; }
+.att-monthly-totals { display: flex; gap: 18px; flex-wrap: wrap; }
+.att-monthly-totals span { color: #93a5af; font-size: 11px; }
+.att-monthly-totals b { color: #334e5e; font-size: 15px; font-weight: 800; }
+.att-monthly-totals span.warn b { color: #c15a4c; }
+.att-monthly-filters { margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf2f4; }
+.att-threshold-field { flex: 0 1 130px; }
+.att-monthly-search { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 16px 0 4px; }
+.att-monthly-table { margin-top: 12px; }
+.att-monthly-student { display: flex; align-items: center; gap: 10px; }
+.att-monthly-student strong { display: block; color: #3f5767; }
+.att-monthly-student small { display: block; color: #9aaab4; font-size: 10px; }
+.att-percentage { display: inline-flex; align-items: center; gap: 7px; font-weight: 800; font-size: 12px; }
+.att-percentage.ok { color: #3f8a60; }
+.att-percentage.low { color: #c15a4c; }
+.att-percentage small { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; background: #fff0eb; color: #c15a4c; border-radius: 20px; padding: 3px 7px; }
+
+/* --- School calendar settings ------------------------------------------- */
+.cal-settings { display: flex; flex-direction: column; gap: 18px; }
+.cal-panel { padding: 22px; }
+.cal-panel-header { display: flex; align-items: start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.cal-panel-copy { flex: 1; min-width: 240px; }
+.cal-panel-copy h2 { color: #30485b; font: 700 19px 'Plus Jakarta Sans'; margin: 6px 0 7px; }
+.cal-panel-copy p { margin: 0; color: #8598a4; font-size: 12px; line-height: 1.55; max-width: 620px; }
+.cal-count { flex: 0 0 auto; border-radius: 20px; padding: 6px 12px; background: #e9f7fa; color: #247790; font-size: 12px; font-weight: 800; }
+.cal-count.special { background: #e8f7ed; color: #3f8a60; }
+
+.cal-block { margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf2f4; }
+.cal-block-head { margin-bottom: 13px; }
+.cal-block-head strong, .cal-block-head span { display: block; }
+.cal-block-head strong { color: #3f5767; font-size: 13px; }
+.cal-block-head span { margin-top: 4px; color: #94a5ae; font-size: 11px; }
+.cal-week { display: flex; gap: 10px; flex-wrap: wrap; }
+.cal-day-pill {
+  flex: 0 0 auto;
+  min-width: 108px;
+  border: 1px solid #dfeaec;
+  border-radius: 13px;
+  background: #fbfdfe;
+  padding: 12px 14px;
+  text-align: left;
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+.cal-day-pill:hover { transform: translateY(-2px); box-shadow: 0 8px 18px #294e6314; }
+.cal-day-short, .cal-day-full, .cal-day-state { display: block; }
+.cal-day-short { color: #3f5767; font: 800 15px 'Plus Jakarta Sans'; }
+.cal-day-full { margin-top: 2px; color: #94a5ae; font-size: 10px; }
+.cal-day-state { margin-top: 7px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.cal-day-pill.working { background: #f2fbf5; border-color: #cdead7; }
+.cal-day-pill.working .cal-day-short { color: #3f8a60; }
+.cal-day-pill.working .cal-day-state { color: #3f8a60; }
+.cal-day-pill.off { background: #fffbe8; border-color: #f2dfa3; }
+.cal-day-pill.off .cal-day-short { color: #a97f22; }
+.cal-day-pill.off .cal-day-state { color: #a97f22; }
+.cal-week-toggle { margin-top: 12px; border: 0; background: transparent; color: #378ba6; font-size: 11px; font-weight: 700; padding: 0; }
+.cal-week-toggle:hover { color: #247790; text-decoration: underline; }
+
+.cal-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+.cal-policy-card {
+  display: flex;
+  align-items: start;
+  gap: 13px;
+  border: 1px solid #e6eef2;
+  border-radius: 14px;
+  background: #fbfdfe;
+  padding: 16px;
+}
+.cal-policy-card.checkable { cursor: pointer; transition: border-color .2s ease, background-color .2s ease; }
+.cal-policy-card.checkable:hover { border-color: #b8dbe3; background: #f6fbfc; }
+.cal-policy-icon { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; background: #e4f5f8; color: #398ca6; }
+.cal-policy-body { flex: 1; min-width: 0; }
+.cal-policy-body strong, .cal-policy-body small { display: block; }
+.cal-policy-body strong { color: #3f5767; font-size: 12.5px; line-height: 1.4; }
+.cal-policy-body small { margin-top: 5px; color: #94a5ae; font-size: 11px; line-height: 1.5; }
+.cal-threshold-row { display: flex; align-items: center; gap: 7px; margin-top: 11px; }
+.cal-threshold-row input {
+  width: 96px;
+  border: 1px solid #dfe9ed;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #405a6b;
+  background: white;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+.cal-threshold-row input:focus { border-color: #71bfd4; box-shadow: 0 0 0 3px #dff4f8; }
+.cal-threshold-unit { color: #93a5af; font-size: 13px; font-weight: 800; }
+.cal-inline-error { display: block; margin-top: 7px; color: #c15a4c; font-size: 10px; font-weight: 700; }
+
+.cal-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 18px 0 0; color: #8ea3ad; font-size: 11px; line-height: 1.6; }
+.cal-hint svg { color: #7cbcd0; flex: 0 0 auto; }
+.cal-hint.subtle { margin-top: 8px; }
+.cal-empty { margin: 14px 0 0; padding: 14px 16px; border: 1px dashed #d6e4e9; border-radius: 11px; background: #fafdfe; color: #93a5ae; font-size: 11px; }
+
+.cal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.cal-form { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf2f4; }
+.cal-form .control-field { flex: 1 1 150px; min-width: 140px; }
+.cal-add-button { flex: 0 0 auto; }
+.cal-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; max-height: 340px; overflow-y: auto; }
+.cal-month-label { display: block; margin-bottom: 7px; color: #8ea3ad; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; }
+.cal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e6eef2;
+  border-radius: 11px;
+  background: #fcfefe;
+  padding: 10px 12px;
+  margin-bottom: 7px;
+  transition: border-color .2s ease, background-color .2s ease;
+}
+.cal-item.holiday, .cal-item.vacation, .cal-item.exam { background: #fffdf7; border-color: #f2e6c2; }
+.cal-item.special_working { background: #f6fcf8; border-color: #d6ecdd; }
+.cal-item-date { flex: 0 0 132px; color: #536a79; font-size: 11px; font-weight: 700; }
+.cal-item-copy { flex: 1; min-width: 0; }
+.cal-item-copy strong, .cal-item-copy small { display: block; }
+.cal-item-copy strong { color: #3f5767; font-size: 12px; }
+.cal-item-copy small { margin-top: 2px; color: #9aaab4; font-size: 10px; }
+.cal-item-remove { flex: 0 0 auto; border: 1px solid #f3d3cb; background: #fff6f3; color: #c15a4c; border-radius: 8px; padding: 6px; display: grid; place-items: center; transition: .2s ease; }
+.cal-item-remove:hover { background: #ffe9e3; transform: translateY(-1px); }
+
+/* --- Clickable month grid ------------------------------------------------ */
+.cal-grid-panel { padding: 20px 22px; }
+.cal-grid-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.cal-grid-head strong { display: block; margin-top: 5px; color: #30485b; font: 700 17px 'Plus Jakarta Sans'; }
+.cal-grid-note { display: inline-flex; align-items: center; gap: 7px; color: #94a5ae; font-size: 11px; max-width: 420px; }
+.cal-grid-note svg { color: #7cbcd0; flex: 0 0 auto; }
+.cal-grid-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 16px 0 6px; }
+.cal-grid-weekdays span { text-align: center; color: #99a9b2; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
+.cal-grid-cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e6eef2;
+  border-radius: 10px;
+  background: #fcfefe;
+  color: #536a79;
+  font-size: 12px;
+  font-weight: 700;
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+.cal-cell.blank { border: 0; background: transparent; pointer-events: none; }
+.cal-cell:hover { transform: translateY(-2px); box-shadow: 0 8px 16px #294e6314; border-color: #8fc9d7; }
+.cal-cell.working { background: #f6fcf8; border-color: #d6ecdd; color: #3f8a60; }
+.cal-cell.off { background: #fffbe8; border-color: #f2dfa3; color: #a97f22; }
+.cal-cell.special { background: #e9f7fa; border-color: #b8dbe3; color: #247790; }
+.cal-cell.today { box-shadow: inset 0 0 0 2px #3da4c5; }
+.cal-cell-dot { position: absolute; bottom: 5px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .7; }
+.cal-grid-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid #edf2f4; }
+.cal-grid-legend span { display: inline-flex; align-items: center; gap: 7px; color: #8ea3ad; font-size: 10px; font-weight: 700; }
+.swatch { width: 14px; height: 14px; border-radius: 5px; border: 1px solid transparent; }
+.swatch.working { background: #f6fcf8; border-color: #d6ecdd; }
+.swatch.off { background: #fffbe8; border-color: #f2dfa3; }
+.swatch.special { background: #e9f7fa; border-color: #b8dbe3; }
+
+@media (max-width: 1100px) {
+  .att-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cal-policy-grid, .cal-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .att-overview-panel, .att-monthly, .cal-panel, .cal-grid-panel { padding: 17px; }
+  .att-overview-head, .att-roster-head, .cal-panel-header, .cal-grid-head { align-items: start; flex-direction: column; }
+  .att-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .att-stat { padding: 13px; }
+  .att-stat strong { font-size: 22px; }
+  .att-roster-actions { width: 100%; }
+  .att-roster-actions .search-field { width: 100%; }
+  .att-roster-actions .primary-button { width: 100%; }
+  .att-roster-stats { width: 100%; }
+  .att-roster-stat { flex: 1 1 auto; }
+  .cal-day-pill { flex: 1 1 calc(50% - 10px); min-width: 0; }
+  .cal-item { flex-wrap: wrap; }
+  .cal-item-date { flex: 1 1 100%; }
+  .att-monthly-search { align-items: stretch; flex-direction: column; }
+  .att-monthly-search .search-field { width: 100%; }
+  .cal-add-button { width: 100%; }
+}
+
+@media print {
+  .att-overview, .cal-settings, .att-roster-actions, .att-pills, .att-monthly-filters, .att-monthly-search { display: none !important; }
+  .att-roster-head { padding: 0 0 10px; background: #fff; border-bottom: 1px solid #ddd; }
+  .att-roster-stat, .att-roster-stat.present, .att-roster-stat.absent, .att-roster-stat.late, .att-roster-stat.leave {
+    background: #fff !important;
+    border-color: #ccc !important;
+    padding: 6px 10px;
+    min-width: 0;
+  }
+  .att-roster-stat span, .att-roster-stat strong { color: #111 !important; }
+  .att-roster-stat strong { font-size: 15px; }
+}
