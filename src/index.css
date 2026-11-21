@@ -1806,3 +1806,29 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 @media (max-width: 860px) {
   .fee-scan-result { grid-template-columns: 1fr; }
 }
+
+/* ===== Fee challans inside the family portals ===== */
+.student-fee-panel { margin-top: 16px; }
+.student-fee-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.student-fee-stat { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; background: #f4fafc; border: 1px solid #e2eef5; }
+.student-fee-stat span { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #5d707c; font-weight: 700; }
+.student-fee-stat strong { font-size: 17px; color: #1d3c4d; font-variant-numeric: tabular-nums; }
+.student-fee-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.student-fee-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: #fff; border: 1px solid #e2eef5; box-shadow: 0 1px 2px rgba(19, 42, 58, 0.04); transition: box-shadow 0.2s ease, transform 0.2s ease; }
+.student-fee-card:hover { box-shadow: 0 8px 22px rgba(19, 42, 58, 0.08); transform: translateY(-1px); }
+.student-fee-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.student-fee-card-head strong { display: block; font-size: 14.5px; color: #1d3c4d; }
+.student-fee-number { display: block; margin-top: 2px; font-size: 12px; color: #5d707c; font-variant-numeric: tabular-nums; }
+.student-fee-rows { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+.student-fee-rows .parent-detail-row { flex: 0 1 auto; gap: 8px; }
+.student-fee-breakdown { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.student-fee-breakdown span { padding: 4px 10px; border-radius: 999px; background: #f4fafc; border: 1px solid #e2eef5; font-size: 11.5px; color: #41606f; font-variant-numeric: tabular-nums; }
+.student-fee-card .secondary-button { align-self: flex-start; }
+.student-fee-pay { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px; background: linear-gradient(120deg, #eef8fa, #f7fcfd); }
+.student-fee-pay-head { display: flex; align-items: center; gap: 8px; color: #226d86; }
+.student-fee-pay p { margin: 0; font-size: 12.5px; color: #526b7b; }
+.student-fee-pay p strong { color: #226d86; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 720px) {
+  .student-fee-summary { grid-template-columns: 1fr; }
+}

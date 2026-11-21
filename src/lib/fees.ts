@@ -444,6 +444,22 @@ export async function updateChallanStatus(ids: string[], status: FeeChallanStatu
   }
 }
 
+// The challans a family can see in their own portal: a student sees their own, a parent
+// sees every child linked to their account. The database decides what is visible.
+export async function fetchChallansForStudent(studentId: string): Promise<{ challans: FeeChallan[]; error: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('school_fee_challans')
+      .select(CHALLAN_COLUMNS)
+      .eq('student_id', studentId)
+      .order('month', { ascending: false });
+    if (error) return { challans: [], error: 'The fee challans could not be loaded.' };
+    return { challans: (data ?? []) as FeeChallan[], error: null };
+  } catch {
+    return { challans: [], error: 'The fee challans could not be loaded. Check your connection and try again.' };
+  }
+}
+
 // Money received on one day, across every class.
 export function collectedOn(payments: FeePayment[], day: string): number {
   return payments

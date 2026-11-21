@@ -185,6 +185,7 @@ export type PortalNotification = {
   attendance_date: string | null;
   created_at: string;
   attachment_url: string | null;
+  challan_id?: string | null;
 };
 
 export type InformationRecord = {

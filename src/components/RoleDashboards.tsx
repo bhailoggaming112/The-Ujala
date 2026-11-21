@@ -3,6 +3,7 @@ import { Bell, CalendarCheck2, FileBadge2, GraduationCap, Paperclip, Users } fro
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { fetchPortalNotifications } from '@/lib/absenteeAlerts';
+import { StudentFeePanel } from '@/components/StudentFeePanel';
 import type { PortalNotification, Student } from '@/lib/schoolTypes';
 
 export function ParentDashboard() {
@@ -84,15 +85,15 @@ export function ParentDashboard() {
       <section className="panel parent-notices-panel">
         <div className="panel-header">
           <div>
-            <span className="eyebrow">Attendance notifications</span>
+            <span className="eyebrow">Attendance and fee notifications</span>
             <h2>Notices from the school</h2>
-            <p className="panel-subtitle">A notice appears here as soon as the school records your child as absent, on leave or arriving late.</p>
+            <p className="panel-subtitle">A notice appears here as soon as the school records your child as absent, on leave or late, or issues a fee challan.</p>
           </div>
           <Bell size={20} />
         </div>
         {noticeError && <p className="dmc-warning">{noticeError}</p>}
         {notifications.length === 0 ? (
-          <p className="empty-state">No notices yet. When your child is marked absent, on leave or late, the details will appear here.</p>
+          <p className="empty-state">No notices yet. When your child is marked absent, on leave or late, or a fee challan is issued, the details will appear here.</p>
         ) : (
           <ul className="parent-notice-list">
             {notifications.map((notice) => (
@@ -156,6 +157,8 @@ export function ParentDashboard() {
                 <div className="parent-detail-row"><span>Fee balance</span><strong>Rs. {child.fee_balance.toLocaleString()}</strong></div>
                 <div className="parent-detail-row"><span>Guardian phone</span><strong>{child.guardian_phone}</strong></div>
               </div>
+
+              <StudentFeePanel studentId={child.id} studentName={child.full_name} admissionNumber={child.admission_number} />
             </section>
           );
         })}
@@ -309,6 +312,8 @@ export function StudentDashboard({ onToast }: { onToast: (message: string) => vo
           )}
         </section>
       </div>
+
+      <StudentFeePanel studentId={student.id} admissionNumber={student.admission_number} />
     </div>
   );
 }

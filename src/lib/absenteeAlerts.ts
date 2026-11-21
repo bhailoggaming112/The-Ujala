@@ -299,7 +299,7 @@ export async function fetchPortalNotifications(studentIds: string[]): Promise<{ 
   try {
     const { data, error } = await supabase
       .from('school_portal_notifications')
-      .select('id, student_id, notification_type, title, body, attendance_date, created_at, attachment_url')
+      .select('id, student_id, notification_type, title, body, attendance_date, created_at, attachment_url, challan_id')
       .in('student_id', studentIds)
       .order('created_at', { ascending: false })
       .limit(40);
