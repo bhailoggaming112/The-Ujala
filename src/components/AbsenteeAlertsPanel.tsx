@@ -10,7 +10,7 @@ import {
   fetchAbsentStudentsForDate, markAbsenteesSent, removeAbsentees, saveAbsenteeLanguage,
   saveAbsenteeTemplate, syncAbsentees,
 } from '@/lib/absenteeAlerts';
-import { ATTACHMENT_ACCEPT, messageWithAttachment, uploadAbsenteeAttachment, whatsappLink } from '@/lib/whatsapp';
+import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, uploadAbsenteeAttachment, whatsappLink } from '@/lib/whatsapp';
 
 const DEFAULT_WORDING: Record<AbsenteeTemplate['language'], string> = {
   English: `Dear Parent or Guardian, {student_name} of {class} was marked absent on {date} at {school_name}. Please contact the school office if this was not expected.`,
@@ -55,6 +55,9 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   // Rows the browser refused to open in a new tab, kept so the office can click each
   // one and still send it.
   const [blocked, setBlocked] = useState<{ id: string; logId: string | null; student: string; phone: string; link: string }[]>([]);
+  // Selected students with no usable WhatsApp number, listed so the office can fix
+  // the student record instead of the app opening a broken chat.
+  const [unreachable, setUnreachable] = useState<{ id: string; student: string }[]>([]);
   const fileInput = useRef<HTMLInputElement | null>(null);
   // Held in a ref so the count callback's changing identity cannot retrigger the
   // effect below on every render.
@@ -118,6 +121,10 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const queuedRows = queue.filter((entry) => entry.status === 'queued');
   const toSend = queuedRows.filter((entry) => draftSelected.includes(entry.id));
   const previewEntry = toSend[0] ?? queuedRows[0] ?? null;
+
+  // How many of the rows on screen cannot be messaged because no real WhatsApp
+  // number is saved for the student.
+  const missingNumbers = queuedRows.filter((entry) => !isValidWhatsAppNumber(entry.parent_phone)).length;
 
   const sent = queue.filter((entry) => entry.status === 'sent');
   const allSelected = queuedRows.length > 0 && toSend.length === queuedRows.length;
@@ -201,17 +208,29 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   // between sends keeps the school number from being flagged for bulk messaging.
   const sendSelected = async () => {
     if (toSend.length === 0) { onToast('Tick the students you want to message first.'); return; }
+    // A row whose saved contact is not a real phone number is never dialled; the
+    // office is told which students need a WhatsApp number saved instead.
+    const sendable = toSend.filter((entry) => isValidWhatsAppNumber(entry.parent_phone));
+    const unreachable = toSend.filter((entry) => !isValidWhatsAppNumber(entry.parent_phone));
+    if (sendable.length === 0) {
+      onToast(`${unreachable.length} selected student${unreachable.length === 1 ? ' has' : 's have'} no valid WhatsApp number saved. Add one on the student record, then try again.`);
+      return;
+    }
     cancelSend.current = false;
     setSending(true);
-    setSendProgress({ done: 0, total: toSend.length });
+    setSendProgress({ done: 0, total: sendable.length });
     setBlocked([]);
+    setUnreachable([]);
+    if (unreachable.length > 0) {
+      setUnreachable(unreachable.map((entry) => ({ id: entry.id, student: entry.student_name })));
+    }
 
-    const outgoing = toSend.map((entry) => ({
+    const outgoing = sendable.map((entry) => ({
       entry,
       message: messageWithAttachment(entry.message_body ?? '', entry.attachment_url ?? attachment?.url ?? null),
     }));
 
-    const log = await queueSmsMessages(toSend.map((entry, index) => ({
+    const log = await queueSmsMessages(sendable.map((entry, index) => ({
       student_id: entry.student_id,
       student_name: entry.student_name,
       class_name: entry.class_name,
@@ -269,7 +288,6 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       await supabase.from('school_sms_log').delete().in('id', log.ids);
       onToast('Sending stopped. Nothing was sent.');
     }
-
     if (sentIds.length > 0) {
       const reloaded = await fetchAbsenteeQueue(forDate);
       if (!reloaded.error) setQueue(reloaded.entries);
@@ -320,6 +338,12 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       </div>
 
       {queueError && <p className="dmc-warning">{queueError}</p>}
+
+      {missingNumbers > 0 && (
+        <p className="dmc-warning">
+          {missingNumbers} waiting student{missingNumbers === 1 ? ' has' : 's have'} no valid WhatsApp number saved. WhatsApp Number is used first, then Messaging Number, then Father Contact No. Add a WhatsApp number on the student record to message them.
+        </p>
+      )}
 
       <div className="panel absentee-attachment">
         <div className="absentee-attachment-head">
@@ -483,7 +507,11 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
                 </td>
                 <td><strong>{entry.student_name}</strong></td>
                 <td>{entry.class_name ? `${entry.class_name} · ${entry.section_name ?? '—'}` : '—'}</td>
-                <td>{entry.parent_phone || '—'}</td>
+                <td>
+                  {entry.parent_phone
+                    ? <span className="absentee-number">{entry.parent_phone}</span>
+                    : <span className="absentee-number missing">No number</span>}
+                </td>
                 <td><span className="absentee-lang">{entry.language}</span></td>
                 <td
                   className={`absentee-message ${entry.language === 'Urdu' ? 'urdu-text' : ''}`}
@@ -533,6 +561,23 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
           </button>
         </div>
       </div>
+
+      {unreachable.length > 0 && (
+        <div className="absentee-blocked unreachable">
+          <div className="absentee-blocked-head">
+            <AlertTriangle size={16} />
+            <div>
+              <strong>{unreachable.length} student{unreachable.length === 1 ? '' : 's'} could not be messaged</strong>
+              <small>No valid WhatsApp number is saved for them, so no chat was opened. Save a WhatsApp number on the student record and send again.</small>
+            </div>
+          </div>
+          <ul>
+            {unreachable.map((row) => (
+              <li key={row.id}><span><strong>{row.student}</strong><small>No valid WhatsApp number saved</small></span></li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {blocked.length > 0 && (
         <div className="absentee-blocked">

@@ -15,15 +15,71 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 // Turns whatever the office typed into the digits-only international form WhatsApp
-// expects, so "0300 1234567", "+92 300 1234567" and "0092-300-1234567" all become
-// 923001234567.
+// expects, so "0300 1234567", "+92 300 1234567", "92-0300-1234567" and
+// "0092-300-1234567" all become 923001234567.
 export function cleanPhoneNumber(raw: string | null | undefined): string {
   if (!raw) return '';
   let digits = raw.replace(/\D/g, '');
   if (!digits) return '';
   if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith(`${DEFAULT_COUNTRY_CODE}0`)) digits = DEFAULT_COUNTRY_CODE + digits.slice(3);
   if (digits.startsWith('0')) digits = DEFAULT_COUNTRY_CODE + digits.slice(1);
   return digits;
+}
+
+// A national identity number is 13 digits, which is exactly the shape a CNIC takes,
+// so it can never be treated as a phone number.
+const CNIC_DIGITS = 13;
+
+export function isValidWhatsAppNumber(raw: string | null | undefined): boolean {
+  const digits = cleanPhoneNumber(raw);
+  if (!digits) return false;
+  if (digits.length === CNIC_DIGITS) return false;
+  if (digits.length < 10 || digits.length > 15) return false;
+  // A number that already carries the country code must be a full 92 + 10 digits.
+  if (digits.startsWith(DEFAULT_COUNTRY_CODE) && digits.length !== 12) return false;
+  return true;
+}
+
+export type WhatsAppSource = 'WhatsApp Number' | 'Messaging Number' | 'Father Contact No.';
+
+export type WhatsAppContact = { number: string; source: WhatsAppSource | null; raw: string | null };
+
+export type WhatsAppFields = {
+  whatsapp_number?: string | null;
+  messaging_number?: string | null;
+  father_contact_number?: string | null;
+};
+
+// The WhatsApp Number saved on the student is always the first choice. Messaging
+// Number and Father Contact No. are only used when no WhatsApp Number is saved, and
+// a value that is not a real phone number (a CNIC, for example) is skipped rather
+// than dialled.
+export function pickWhatsAppContact(student: WhatsAppFields): WhatsAppContact {
+  const candidates: { label: WhatsAppSource; value: string | null }[] = [
+    { label: 'WhatsApp Number', value: student.whatsapp_number ?? null },
+    { label: 'Messaging Number', value: student.messaging_number ?? null },
+    { label: 'Father Contact No.', value: student.father_contact_number ?? null },
+  ];
+  for (const candidate of candidates) {
+    const raw = (candidate.value ?? '').trim();
+    if (!raw || !isValidWhatsAppNumber(raw)) continue;
+    return { number: cleanPhoneNumber(raw), source: candidate.label, raw };
+  }
+  return { number: '', source: null, raw: null };
+}
+
+// Explains why a student cannot be messaged, so the office knows what to fix instead
+// of the app opening a WhatsApp chat with a broken number.
+export function whatsappNumberWarning(student: WhatsAppFields): string {
+  const saved = [student.whatsapp_number, student.messaging_number, student.father_contact_number]
+    .map((value) => (value ?? '').trim())
+    .filter(Boolean);
+  if (saved.length === 0) return 'No WhatsApp, messaging or father contact number is saved for this student.';
+  if (saved.some((value) => cleanPhoneNumber(value).length === CNIC_DIGITS)) {
+    return 'The saved number looks like a CNIC rather than a phone number. Save a real WhatsApp number on the student record.';
+  }
+  return 'The saved contact numbers are not valid phone numbers, so no WhatsApp chat can be opened for this student.';
 }
 
 export function whatsappLink(rawPhone: string | null | undefined, message: string): string {

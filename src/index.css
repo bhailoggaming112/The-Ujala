@@ -1343,6 +1343,12 @@ input[dir="rtl"]:focus {
 .absentee-blocked li strong { font-size: 13px; color: #22333d; }
 .absentee-blocked li small { font-size: 11.5px; color: #7b8f9c; }
 .absentee-blocked a.secondary-button { text-decoration: none; }
+.absentee-blocked.unreachable { border-color: #f0c6c0; background: #fdf3f1; }
+.absentee-blocked.unreachable .absentee-blocked-head { color: #9b4a3c; }
+.absentee-blocked.unreachable .absentee-blocked-head strong { color: #8a3f31; }
+.absentee-blocked.unreachable li { border-color: #f0c6c0; }
+.absentee-number { font-variant-numeric: tabular-nums; font-size: 12.5px; color: #3f5866; }
+.absentee-number.missing { color: #b4552f; font-weight: 600; }
 
 .sms-attachment { display: inline-flex; align-items: center; gap: 5px; color: #2f6d8f; font-size: 12.5px; font-weight: 600; text-decoration: none; }
 .sms-attachment:hover { text-decoration: underline; }

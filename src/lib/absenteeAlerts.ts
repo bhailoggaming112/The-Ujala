@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { AbsenteeQueueEntry, AbsenteeTemplate, PortalNotification, Student } from '@/lib/schoolTypes';
 import { renderAbsenteeText } from '@/lib/noticeText';
+import { pickWhatsAppContact } from '@/lib/whatsapp';
 
 const QUEUE_COLUMNS =
   'id, student_id, student_name, class_name, section_name, parent_phone, attendance_date, language, message_body, status, sent_at, created_at, attachment_url, attachment_name';
@@ -10,11 +11,12 @@ const QUEUE_COLUMNS =
 export type AbsentStudent = Pick<
   Student,
   'id' | 'full_name' | 'class_name' | 'section_name' | 'status'
-  | 'guardian_phone' | 'messaging_number' | 'father_contact_number' | 'whatsapp_number'
+  | 'messaging_number' | 'father_contact_number' | 'whatsapp_number'
 >;
 
-const guardianNumber = (student: AbsentStudent) =>
-  student.guardian_phone || student.messaging_number || student.father_contact_number || student.whatsapp_number || null;
+// The queue stores the number exactly as it will be dialled, taken from the student's
+// WhatsApp Number whenever one is saved.
+const alertNumber = (student: AbsentStudent) => pickWhatsAppContact(student).number || null;
 
 export function buildAbsenteeEntries(
   language: AbsenteeTemplate['language'],
@@ -28,7 +30,7 @@ export function buildAbsenteeEntries(
     student_name: student.full_name,
     class_name: student.class_name,
     section_name: student.section_name,
-    parent_phone: guardianNumber(student),
+    parent_phone: alertNumber(student),
     attendance_date: forDate,
     language,
     message_body: renderAbsenteeText(templateText, {
@@ -48,7 +50,7 @@ export async function fetchAbsentStudentsForDate(forDate: string): Promise<{ stu
   try {
     const { data, error } = await supabase
       .from('school_attendance')
-      .select('student_id, student:school_students(id, full_name, class_name, section_name, status, guardian_phone, messaging_number, father_contact_number, whatsapp_number)')
+      .select('student_id, student:school_students(id, full_name, class_name, section_name, status, messaging_number, father_contact_number, whatsapp_number)')
       .eq('attendance_date', forDate)
       .eq('status', 'absent');
     if (error) return { students: [], error: error.message };
@@ -132,7 +134,9 @@ export async function syncAbsentees(
   const toReword = entries.filter((entry) => {
     const saved = byStudent.get(entry.student_id);
     return saved?.status === 'queued'
-      && (saved.message_body !== entry.message_body || saved.language !== entry.language);
+      && (saved.message_body !== entry.message_body
+        || saved.language !== entry.language
+        || saved.parent_phone !== entry.parent_phone);
   });
 
   try {
@@ -149,7 +153,7 @@ export async function syncAbsentees(
         const saved = byStudent.get(entry.student_id);
         return supabase
           .from('school_absentee_queue')
-          .update({ language: entry.language, message_body: entry.message_body })
+          .update({ language: entry.language, message_body: entry.message_body, parent_phone: entry.parent_phone })
           .eq('id', saved?.id ?? '');
       }));
       const failed = results.find((result) => result.error);
@@ -249,7 +253,7 @@ export async function fetchPortalNotifications(studentIds: string[]): Promise<{ 
   try {
     const { data, error } = await supabase
       .from('school_portal_notifications')
-      .select('id, student_id, notification_type, title, body, attendance_date, created_at')
+      .select('id, student_id, notification_type, title, body, attendance_date, created_at, attachment_url')
       .in('student_id', studentIds)
       .order('created_at', { ascending: false })
       .limit(40);
