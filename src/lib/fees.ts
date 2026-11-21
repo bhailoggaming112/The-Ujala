@@ -1,0 +1,364 @@
+import { supabase } from '@/lib/supabase';
+import type { Student } from '@/lib/schoolTypes';
+
+export const CLASS_OPTIONS = [
+  'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+  'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
+];
+
+export const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank', label: 'Bank' },
+  { value: 'online', label: 'Online' },
+] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number]['value'];
+
+export type FeeStructure = {
+  class_name: string;
+  tuition_fee: number;
+  admission_misc: number;
+  exam_lab: number;
+  transport: number;
+  late_fine: number;
+  updated_at?: string;
+};
+
+export type FeeHeads = {
+  tuition_fee: number;
+  admission_misc: number;
+  exam_lab: number;
+  transport: number;
+  arrears: number;
+  concession: number;
+  late_fine: number;
+};
+
+export type FeeChallanStatus = 'unpaid' | 'partial' | 'paid';
+
+export type FeeChallan = FeeHeads & {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class_name: string | null;
+  section_name: string | null;
+  month: string;
+  due_date: string;
+  total: number;
+  status: FeeChallanStatus;
+  created_at: string;
+};
+
+export type FeePayment = {
+  id: string;
+  student_id: string;
+  receipt_number: string;
+  amount: number;
+  method: PaymentMethod;
+  payment_date: string;
+  remarks: string | null;
+  balance_after: number;
+  created_at: string;
+  student_name: string;
+  class_name: string | null;
+  section_name: string | null;
+  admission_number: string | null;
+};
+
+export type FeeSummary = {
+  previousArrears: number;
+  currentMonthlyFee: number;
+  concession: number;
+  fine: number;
+  totalPayable: number;
+  paid: number;
+  remaining: number;
+};
+
+export const EMPTY_HEADS: FeeHeads = {
+  tuition_fee: 0, admission_misc: 0, exam_lab: 0,
+  transport: 0, arrears: 0, concession: 0, late_fine: 0,
+};
+
+export const HEAD_LABELS: Record<keyof FeeHeads, string> = {
+  tuition_fee: 'Tuition fee',
+  admission_misc: 'Admission / misc',
+  exam_lab: 'Exam / lab',
+  transport: 'Transport',
+  arrears: 'Previous arrears',
+  concession: 'Concession',
+  late_fine: 'Late fine',
+};
+
+export const formatMoney = (value: number) => `Rs ${Math.round(Number(value) || 0).toLocaleString()}`;
+
+export const formatDay = (value: string | null) => {
+  if (!value) return '—';
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+export const formatStamp = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+// Fee months are stored as YYYY-MM so they sort and group without a date column.
+export const monthKey = (date: Date = new Date()) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
+
+export const monthLabel = (key: string) => {
+  const parsed = new Date(`${key.slice(0, 7)}-01T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? key : parsed.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+};
+
+export const monthOptions = (count = 15) => {
+  const today = new Date();
+  return Array.from({ length: count }, (_, index) => monthKey(new Date(today.getFullYear(), today.getMonth() - index, 1)));
+};
+
+// Heads add up, then the concession comes off; the total is never negative.
+export const headsTotal = (heads: FeeHeads) => Math.max(
+  0,
+  heads.tuition_fee + heads.admission_misc + heads.exam_lab + heads.transport + heads.arrears + heads.late_fine - heads.concession,
+);
+
+// A student's own agreed tuition wins over the class structure, so an existing
+// concession arrangement is never overwritten by the standard rate.
+export function tuitionFor(student: Student, structure: FeeStructure | undefined): number {
+  const own = Number(student.tuition_fee ?? 0);
+  if (own > 0) return own;
+  return Number(structure?.tuition_fee ?? 0);
+}
+
+export function concessionFor(student: Student, tuition: number): number {
+  const amount = Number(student.fee_concession_amount ?? 0);
+  if (amount > 0) return Math.min(amount, tuition);
+  const percent = Number(student.fee_concession_percentage ?? 0);
+  if (percent > 0) return Math.min((tuition * percent) / 100, tuition);
+  return 0;
+}
+
+// What the student is expected to pay for one month before arrears and fines.
+export function monthlyChargeFor(student: Student, structure: FeeStructure | undefined) {
+  const tuition = tuitionFor(student, structure);
+  const concession = concessionFor(student, tuition);
+  const extra = Number(structure?.admission_misc ?? 0) + Number(structure?.exam_lab ?? 0) + Number(structure?.transport ?? 0);
+  return { tuition, concession, currentMonthlyFee: Math.max(0, tuition - concession) + extra };
+}
+
+// The fee summary shown in the collection tab. The school's own balance is treated as
+// the truth for what is still owed; the arrears line is that balance with the current
+// month's unpaid part set aside, so the two never disagree.
+export function buildFeeSummary(
+  student: Student,
+  structure: FeeStructure | undefined,
+  challan: FeeChallan | undefined,
+  paidThisMonth: number,
+  today: string,
+): FeeSummary {
+  const { concession, currentMonthlyFee } = monthlyChargeFor(student, structure);
+  const monthCharge = challan ? Number(challan.total) : currentMonthlyFee;
+  const outstanding = Math.max(0, Number(student.fee_balance ?? 0));
+  const overdue = challan ? today > challan.due_date : false;
+  const fine = overdue && outstanding > 0 ? Number(structure?.late_fine ?? 0) : 0;
+  const previousArrears = Math.max(0, outstanding - Math.max(0, monthCharge - paidThisMonth));
+  const totalPayable = previousArrears + currentMonthlyFee + fine;
+  return {
+    previousArrears,
+    currentMonthlyFee,
+    concession,
+    fine,
+    totalPayable,
+    paid: paidThisMonth,
+    remaining: outstanding,
+  };
+}
+
+export async function fetchFeeStructures(): Promise<{ structures: FeeStructure[]; error: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('school_fee_structures')
+      .select('class_name, tuition_fee, admission_misc, exam_lab, transport, late_fine, updated_at')
+      .order('class_name');
+    if (error) return { structures: [], error: 'The fee structure could not be loaded.' };
+    return { structures: (data ?? []) as FeeStructure[], error: null };
+  } catch {
+    return { structures: [], error: 'The fee structure could not be loaded. Check your connection and try again.' };
+  }
+}
+
+export async function saveFeeStructure(values: FeeStructure): Promise<string | null> {
+  try {
+    const { error } = await supabase
+      .from('school_fee_structures')
+      .upsert({ ...values, updated_at: new Date().toISOString() }, { onConflict: 'class_name' });
+    return error ? 'The fee structure could not be saved. Please try again.' : null;
+  } catch {
+    return 'The fee structure could not be saved. Check your connection and try again.';
+  }
+}
+
+const PAYMENT_COLUMNS =
+  'id, student_id, receipt_number, amount, method, payment_date, remarks, balance_after, created_at, student:school_students(full_name, class_name, section_name, admission_number)';
+
+type PaymentRow = Omit<FeePayment, 'student_name' | 'class_name' | 'section_name' | 'admission_number'> & {
+  student: { full_name: string; class_name: string | null; section_name: string | null; admission_number: string | null } | null;
+};
+
+const toPayment = (row: PaymentRow): FeePayment => ({
+  ...row,
+  student_name: row.student?.full_name ?? 'Unknown student',
+  class_name: row.student?.class_name ?? null,
+  section_name: row.student?.section_name ?? null,
+  admission_number: row.student?.admission_number ?? null,
+});
+
+export async function fetchFeePayments(limit = 200): Promise<{ payments: FeePayment[]; error: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('school_fee_payments')
+      .select(PAYMENT_COLUMNS)
+      .order('payment_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) return { payments: [], error: 'The fee transactions could not be loaded.' };
+    return { payments: ((data ?? []) as unknown as PaymentRow[]).map(toPayment), error: null };
+  } catch {
+    return { payments: [], error: 'The fee transactions could not be loaded. Check your connection and try again.' };
+  }
+}
+
+// A payment is recorded by the database so the receipt, the fee history and the
+// student's balance are written together and cannot drift apart.
+export async function recordFeePayment(input: {
+  studentId: string;
+  amount: number;
+  method: PaymentMethod;
+  paymentDate: string;
+  remarks: string;
+  receiptNumber: string;
+}): Promise<{ receiptNumber: string; balanceAfter: number; error: string | null }> {
+  try {
+    const { data, error } = await supabase.rpc('record_fee_payment', {
+      p_student_id: input.studentId,
+      p_amount: input.amount,
+      p_method: input.method,
+      p_payment_date: input.paymentDate,
+      p_remarks: input.remarks,
+      p_receipt_number: input.receiptNumber,
+    });
+    if (error) {
+      // The database raises plain, readable reasons (a duplicate receipt number, for
+      // example). Anything else is reported generically.
+      if (error.code === 'P0001' && error.message) return { receiptNumber: '', balanceAfter: 0, error: error.message };
+      return { receiptNumber: '', balanceAfter: 0, error: 'The payment could not be recorded. Please try again.' };
+    }
+    const row = data as { receipt_number?: string; balance_after?: number } | null;
+    return { receiptNumber: row?.receipt_number ?? input.receiptNumber, balanceAfter: Number(row?.balance_after ?? 0), error: null };
+  } catch {
+    return { receiptNumber: '', balanceAfter: 0, error: 'The payment could not be recorded. Check your connection and try again.' };
+  }
+}
+
+export const CHALLAN_COLUMNS =
+  'id, student_id, student_name, class_name, section_name, month, due_date, tuition_fee, admission_misc, exam_lab, transport, arrears, concession, late_fine, total, status, created_at';
+
+export async function fetchChallans(month: string): Promise<{ challans: FeeChallan[]; error: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('school_fee_challans')
+      .select(CHALLAN_COLUMNS)
+      .eq('month', month)
+      .order('student_name');
+    if (error) return { challans: [], error: 'The challans could not be loaded.' };
+    return { challans: (data ?? []) as FeeChallan[], error: null };
+  } catch {
+    return { challans: [], error: 'The challans could not be loaded. Check your connection and try again.' };
+  }
+}
+
+export async function saveChallans(rows: (FeeHeads & {
+  student_id: string;
+  student_name: string;
+  class_name: string | null;
+  section_name: string | null;
+  month: string;
+  due_date: string;
+  total: number;
+})[]): Promise<string | null> {
+  if (rows.length === 0) return null;
+  try {
+    const { error } = await supabase
+      .from('school_fee_challans')
+      .upsert(rows, { onConflict: 'student_id,month' });
+    return error ? 'The challans could not be saved. Please try again.' : null;
+  } catch {
+    return 'The challans could not be saved. Check your connection and try again.';
+  }
+}
+
+export async function updateChallanStatus(ids: string[], status: FeeChallanStatus): Promise<string | null> {
+  if (ids.length === 0) return null;
+  try {
+    const { error } = await supabase.from('school_fee_challans').update({ status }).in('id', ids);
+    return error ? 'The challan status could not be updated.' : null;
+  } catch {
+    return 'The challan status could not be updated.';
+  }
+}
+
+// Money received on one day, across every class.
+export function collectedOn(payments: FeePayment[], day: string): number {
+  return payments
+    .filter((payment) => payment.payment_date === day)
+    .reduce((total, payment) => total + Number(payment.amount), 0);
+}
+
+export function collectedInMonth(payments: FeePayment[], month: string): number {
+  return payments
+    .filter((payment) => (payment.payment_date ?? '').slice(0, 7) === month)
+    .reduce((total, payment) => total + Number(payment.amount), 0);
+}
+
+// Daily totals for the month, oldest first, for the reports table.
+export function dailyTotals(payments: FeePayment[], month: string) {
+  const totals = new Map<string, { amount: number; count: number }>();
+  for (const payment of payments) {
+    const day = (payment.payment_date ?? '').slice(0, 10);
+    if (day.slice(0, 7) !== month) continue;
+    const current = totals.get(day) ?? { amount: 0, count: 0 };
+    totals.set(day, { amount: current.amount + Number(payment.amount), count: current.count + 1 });
+  }
+  return Array.from(totals.entries())
+    .map(([day, value]) => ({ day, ...value }))
+    .sort((a, b) => b.day.localeCompare(a.day));
+}
+
+export function methodTotals(payments: FeePayment[], month: string) {
+  const totals = new Map<string, number>();
+  for (const payment of payments) {
+    if ((payment.payment_date ?? '').slice(0, 7) !== month) continue;
+    totals.set(payment.method, (totals.get(payment.method) ?? 0) + Number(payment.amount));
+  }
+  return PAYMENT_METHODS.map((method) => ({ ...method, amount: totals.get(method.value) ?? 0 }));
+}
+
+export function toCsv(rows: (string | number | null)[][]): string {
+  return rows
+    .map((row) => row.map((cell) => {
+      const text = cell === null || cell === undefined ? '' : String(cell);
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }).join(','))
+    .join('\n');
+}
+
+export function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

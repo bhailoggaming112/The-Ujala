@@ -145,7 +145,8 @@ export type NoticeTemplate = {
 export type AbsenteeAlertStatus = 'absent' | 'leave' | 'late';
 
 // Each alert kind keeps its own saved wording, one row per kind and language.
-export type AlertNoticeType = 'absentee_alert' | 'leave_alert' | 'late_alert';
+// Fee reminders reuse the same message log, so they are listed here too.
+export type AlertNoticeType = 'absentee_alert' | 'leave_alert' | 'late_alert' | 'fee_reminder';
 
 export type AbsenteeTemplate = {
   id?: string;
