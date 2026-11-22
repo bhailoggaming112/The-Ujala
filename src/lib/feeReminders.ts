@@ -95,8 +95,8 @@ export async function sendFeeReminders(targets: Student[], month: string, today:
         await updateSmsStatus(ids, 'sent', `WhatsApp opened (${sendMode})`);
         firstOpened = true;
       } else {
-        // Even the first was blocked — add it to the queue as a clickable link.
-        await updateSmsStatus(ids, 'failed', 'WhatsApp window was blocked');
+        // Even the first was blocked or is an app-mode link — add it to the queue.
+        await updateSmsStatus(ids, 'pending', 'Queued — open from the reminder list');
         queue.push({
           studentId: student.id,
           studentName: student.full_name,

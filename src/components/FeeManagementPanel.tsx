@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
-  BellRing, Coins, FileSpreadsheet, RefreshCw, ScanLine, Send, Wallet, X,
+  BellRing, Coins, ExternalLink, FileSpreadsheet, RefreshCw, ScanLine, Send, Wallet, X,
 } from 'lucide-react';
 import { DeleteVoucherModal } from '@/components/DeleteVoucherModal';
 import { FeeReceiptView } from '@/components/FeeDocuments';
@@ -18,7 +18,7 @@ import {
   monthLabel, monthOptions, payableFee, recordFeePayment, updateFeeVoucher,
   type FeeChallan, type FeePayment, type FeeStructure, type PaymentMethod, type PaymentSettings,
 } from '@/lib/fees';
-import { pickWhatsAppContact, whatsappLink, whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
+import { pickWhatsAppContact, whatsappLink, whatsappWebLink, whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
 import { openWhatsAppChat } from '@/lib/whatsappQueue';
 import { supabase } from '@/lib/supabase';
 
@@ -171,7 +171,7 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           await updateSmsStatus(ids, 'sent', `WhatsApp opened (${sendMode})`);
           firstOpened = true;
         } else {
-          await updateSmsStatus(ids, 'failed', 'WhatsApp window was blocked');
+          await updateSmsStatus(ids, 'pending', 'Queued — open from the reminder list');
           queue.push({ studentName: student.full_name, phone: contact.number, link: result.link, message: body });
         }
       } else {
@@ -181,9 +181,12 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
       }
     }
     if (queue.length > 0) setReminderQueue(queue);
-    const parts = [`${sent} fee reminder${sent === 1 ? '' : 's'} opened in WhatsApp.`];
+    const parts = sent > 0
+      ? [`${sent} fee reminder${sent === 1 ? '' : 's'} opened in WhatsApp.`]
+      : [`${queue.length} fee reminder${queue.length === 1 ? '' : 's'} queued.`];
     if (skipped > 0) parts.push(`${skipped} skipped — check the saved contact numbers.`);
-    if (queue.length > 0) parts.push(`${queue.length} queued — use the links below to open them.`);
+    if (sent > 0 && queue.length > 0) parts.push(`${queue.length} queued — use the links below to open them.`);
+    else if (queue.length > 0) parts.push('Use the links below to open them in WhatsApp.');
     onToast(parts.join(' '));
   };
 
@@ -931,7 +934,7 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
               <span className="eyebrow">WhatsApp reminder queue</span>
               <button className="close-button" onClick={onClearQueue} aria-label="Close">×</button>
             </div>
-            <p className="fee-blocked-intro">The first reminder opened automatically. Click each link below to open the remaining chats one at a time.</p>
+            <p className="fee-blocked-intro">Click <strong>Open WhatsApp App</strong> to launch the installed WhatsApp desktop app. If that does not work, use <strong>Open WhatsApp Web</strong> to open it in a browser tab instead.</p>
             <ul className="fee-blocked-list">
               {reminderQueue.map((row) => (
                 <li key={row.phone + row.studentName}>
@@ -940,8 +943,11 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
                     <small>{row.phone}</small>
                   </div>
                   <div className="fee-blocked-actions">
-                    <a className="primary-button" href={row.link} target="_blank" rel="noopener noreferrer">
-                      <Send size={14} /> Open WhatsApp
+                    <a className="primary-button" href={row.link} rel="noopener noreferrer">
+                      <Send size={14} /> Open WhatsApp App
+                    </a>
+                    <a className="ghost-button" href={whatsappWebLink(row.phone, row.message)} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={14} /> WhatsApp Web
                     </a>
                     <button
                       type="button"

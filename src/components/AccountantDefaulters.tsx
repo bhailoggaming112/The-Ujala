@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { BellRing, Download, Send } from 'lucide-react';
+import { BellRing, Download, ExternalLink, Send } from 'lucide-react';
 import { feeReminderMessage, sendFeeReminders } from '@/lib/feeReminders';
 import { downloadCsv, formatDay, formatMoney, toCsv, type FeePayment } from '@/lib/fees';
-import { whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
+import { whatsappWebLink, whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
 import { fetchAbsenteeSendMode, saveAbsenteeSendMode } from '@/lib/absenteeAlerts';
 import type { Student } from '@/lib/schoolTypes';
 
@@ -87,9 +87,12 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
     const result = await sendFeeReminders(targets, month, today);
     if (result.error) { onToast(result.error); return; }
     if (result.queue.length > 0) setQueue(result.queue);
-    const parts = [`${result.sent} fee reminder${result.sent === 1 ? '' : 's'} opened in WhatsApp.`];
+    const parts = result.sent > 0
+      ? [`${result.sent} fee reminder${result.sent === 1 ? '' : 's'} opened in WhatsApp.`]
+      : [`${result.queue.length} fee reminder${result.queue.length === 1 ? '' : 's'} queued.`];
     if (result.skipped > 0) parts.push(`${result.skipped} skipped — check the saved contact numbers.`);
-    if (result.queue.length > 0) parts.push(`${result.queue.length} queued — use the links below to open them.`);
+    if (result.sent > 0 && result.queue.length > 0) parts.push(`${result.queue.length} queued — use the links below to open them.`);
+    else if (result.queue.length > 0) parts.push('Use the links below to open them in WhatsApp.');
     onToast(parts.join(' '));
   };
 
@@ -227,7 +230,7 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
               <span className="eyebrow">WhatsApp reminder queue</span>
               <button className="close-button" onClick={() => setQueue([])} aria-label="Close">×</button>
             </div>
-            <p className="fee-blocked-intro">The first reminder opened automatically. Click each link below to open the remaining chats one at a time.</p>
+            <p className="fee-blocked-intro">Click <strong>Open WhatsApp App</strong> to launch the installed WhatsApp desktop app. If that does not work, use <strong>Open WhatsApp Web</strong> to open it in a browser tab instead.</p>
             <ul className="fee-blocked-list">
               {queue.map((row) => (
                 <li key={row.phone + row.studentName}>
@@ -236,8 +239,11 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
                     <small>{row.phone}</small>
                   </div>
                   <div className="fee-blocked-actions">
-                    <a className="primary-button" href={row.link} target="_blank" rel="noopener noreferrer">
-                      <Send size={14} /> Open WhatsApp
+                    <a className="primary-button" href={row.link} rel="noopener noreferrer">
+                      <Send size={14} /> Open WhatsApp App
+                    </a>
+                    <a className="ghost-button" href={whatsappWebLink(row.phone, row.message)} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={14} /> WhatsApp Web
                     </a>
                     <button
                       type="button"

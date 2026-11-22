@@ -2,10 +2,14 @@ import { whatsappLink, type AlertSendMode } from '@/lib/whatsapp';
 
 export type OpenResult = { ok: boolean; link: string };
 
-// Opens a WhatsApp chat with the message pre-filled. The real URL is opened
-// directly — no blank tab is created first — so a blocked pop-up leaves nothing
-// behind. When the browser blocks the window, ok is false and the caller can show
-// the returned link as a clickable fallback.
+// Opens a WhatsApp chat with the message pre-filled. For the 'app' mode the
+// whatsapp:// protocol link is fired from a throwaway anchor — this never opens a
+// browser tab, so no "Scan to log in" QR page can appear. If the app is not installed
+// the anchor click simply does nothing visible, and ok is returned as false so the
+// caller can show the whatsapp:// link as a clickable button.
+//
+// 'web' and 'wa.me' modes use window.open, which can open a browser tab — these are
+// only used when the user explicitly picks them from the toggle.
 export function openWhatsAppChat(
   phone: string | null,
   message: string,
@@ -14,15 +18,19 @@ export function openWhatsAppChat(
   const link = whatsappLink(phone, message, mode);
 
   if (mode === 'app') {
-    // A custom-protocol link has no tab to report back, so the click is fired from a
-    // throwaway anchor and WhatsApp Desktop takes over.
+    // Fire the whatsapp:// protocol link from a hidden anchor. This hands off to the
+    // installed WhatsApp app without opening any browser tab. If WhatsApp is not
+    // installed, nothing visible happens — the caller shows the link as a button.
     const anchor = document.createElement('a');
     anchor.href = link;
     anchor.rel = 'noreferrer';
+    anchor.style.display = 'none';
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    return { ok: true, link };
+    // We cannot reliably detect whether the protocol handler launched the app, so
+    // return false to let the caller show a clickable fallback link regardless.
+    return { ok: false, link };
   }
 
   const opened = window.open(link, '_blank', 'noopener,noreferrer');

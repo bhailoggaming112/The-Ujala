@@ -14,7 +14,7 @@ import {
   ALERT_NOTICE_TYPES, ALERT_PLACEHOLDERS, ALERT_STATUSES, ALERT_STATUS_LABELS,
   alertWordingFrom, defaultWordingFor, type AlertTemplates,
 } from '@/lib/alertStatuses';
-import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, uploadAbsenteeAttachment, type AlertSendMode } from '@/lib/whatsapp';
+import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, uploadAbsenteeAttachment, whatsappWebLink, type AlertSendMode } from '@/lib/whatsapp';
 import { openWhatsAppChat } from '@/lib/whatsappQueue';
 
 const SEND_MODES: { value: AlertSendMode; label: string; hint: string; icon: typeof Globe }[] = [
@@ -73,7 +73,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const [uploading, setUploading] = useState(false);
   // Rows the browser refused to open in a new tab, kept so the office can click each
   // one and still send it.
-  const [blocked, setBlocked] = useState<{ id: string; logId: string | null; student: string; phone: string; link: string }[]>([]);
+  const [blocked, setBlocked] = useState<{ id: string; logId: string | null; student: string; phone: string; link: string; message: string }[]>([]);
   // Selected students with no usable WhatsApp number, listed so the office can fix
   // the student record instead of the app opening a broken chat.
   const [unreachable, setUnreachable] = useState<{ id: string; student: string }[]>([]);
@@ -319,7 +319,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
         sentIds.push(entry.id);
         sentLogIds.push(log.ids[index]);
       } else {
-        blockedRows.push({ id: entry.id, logId: log.ids[index] ?? null, student: entry.student_name, phone: entry.parent_phone ?? '', link: opened.link });
+        blockedRows.push({ id: entry.id, logId: log.ids[index] ?? null, student: entry.student_name, phone: entry.parent_phone ?? '', link: opened.link, message });
       }
       setSendProgress({ done: index + 1, total: outgoing.length });
     }
@@ -334,7 +334,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
 
     if (blockedRows.length > 0) {
       setBlocked(blockedRows);
-      onToast(`${blockedRows.length} chat${blockedRows.length === 1 ? '' : 's'} could not open because your browser blocked new tabs. Use the links below to send them.`);
+      onToast(`${blockedRows.length} reminder${blockedRows.length === 1 ? '' : 's'} queued — use the links below to open them in WhatsApp.`);
     } else if (sentIds.length > 0) {
       onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened in ${sendMode === 'app' ? 'the WhatsApp Desktop app' : sendMode === 'web' ? 'WhatsApp Web' : 'WhatsApp'} and recorded in the WhatsApp SMS Report.`);
     } else {
@@ -697,14 +697,15 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
             <AlertTriangle size={16} />
             <div>
               <strong>{blocked.length} chat{blocked.length === 1 ? '' : 's'} were blocked by your browser</strong>
-              <small>Click each link to open WhatsApp with the message ready, then mark it as sent.</small>
+              <small>Click <strong>Open WhatsApp App</strong> to launch the installed app. If that does not work, use <strong>WhatsApp Web</strong> to open it in a browser tab, then mark it as sent.</small>
             </div>
           </div>
           <ul>
             {blocked.map((row) => (
               <li key={row.id}>
                 <span><strong>{row.student}</strong><small>{row.phone || 'No number saved'}</small></span>
-                <a className="secondary-button" href={row.link} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open WhatsApp</a>
+                <a className="primary-button" href={row.link} rel="noreferrer"><Send size={14} /> Open WhatsApp App</a>
+                <a className="secondary-button" href={whatsappWebLink(row.phone, row.message)} target="_blank" rel="noreferrer"><ExternalLink size={14} /> WhatsApp Web</a>
                 <button type="button" className="ghost-button" onClick={() => void confirmBlockedSent(row)}><CheckCheck size={14} /> Mark as sent</button>
               </li>
             ))}

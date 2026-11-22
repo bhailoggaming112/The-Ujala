@@ -111,6 +111,10 @@ export function whatsappLink(
     : `https://wa.me/?text=${text}`;
 }
 
+export function whatsappWebLink(rawPhone: string | null | undefined, message: string): string {
+  return whatsappLink(rawPhone, message, 'web');
+}
+
 export function attachmentError(file: File): string | null {
   if (!ALLOWED_MIME_TYPES.includes(file.type)) return 'Attach a JPEG, PNG, PDF or Word document.';
   if (file.size > MAX_ATTACHMENT_BYTES) return 'That file is larger than 10 MB. Please choose a smaller one.';
