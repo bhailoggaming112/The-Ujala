@@ -1615,6 +1615,12 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 .fee-hint { color: #7b8f9b; font-size: 11.5px; font-weight: 700; background: #f2f7f9; border-radius: 999px; padding: 6px 12px; }
 .fee-note { margin: 14px 0 0; color: #93a5af; font-size: 11.5px; }
 .fee-empty { margin: 0; padding: 16px 4px; color: #93a5af; font-size: 12.5px; }
+.fee-quick-pick { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; margin-bottom: 14px; padding: 8px; border: 1px solid #e4edf1; border-radius: 12px; background: #fbfdfe; }
+.fee-quick-pick-row { display: flex; flex-direction: column; gap: 3px; text-align: left; border: 0; border-radius: 9px; padding: 9px 12px; background: transparent; cursor: pointer; transition: background .15s ease, box-shadow .15s ease; }
+.fee-quick-pick-row:hover { background: #eef6f9; }
+.fee-quick-pick-row.selected { background: #e0f3f8; box-shadow: inset 0 0 0 1.5px #4faecb; }
+.fee-quick-pick-name { font: 700 13px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; }
+.fee-quick-pick-meta { font-size: 11px; color: #8598a4; }
 .fee-error { margin: 4px 0 0; color: #b0483a; font-size: 12px; font-weight: 600; }
 .fee-warn { display: block; margin-top: 4px; color: #b5813a; font-size: 10.5px; font-weight: 600; }
 .fee-mono { font-family: 'SFMono-Regular', 'Menlo', monospace; font-size: 11.5px; color: #526b7b; letter-spacing: .2px; }

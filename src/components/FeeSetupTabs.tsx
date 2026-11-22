@@ -51,6 +51,8 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
   const [sectionFilter, setSectionFilter] = useState('');
   const [mode, setMode] = useState<'group' | 'single'>('group');
   const [singleId, setSingleId] = useState('');
+  const [singleClass, setSingleClass] = useState('');
+  const [singleSearch, setSingleSearch] = useState('');
   const [dueDate, setDueDate] = useState(() => {
     const date = new Date();
     date.setDate(10);
@@ -70,6 +72,33 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
       .filter((student) => !classFilter || student.class_name === classFilter)
       .filter((student) => !sectionFilter || student.section_name === sectionFilter);
   }, [mode, singleId, students, classFilter, sectionFilter]);
+
+  // In "One student" mode the search box filters by admission no., student name, or
+  // challan no. so the user can jump straight to the right student instead of scrolling
+  // a single long dropdown. The dropdown stays in sync: picking a result sets singleId.
+  const singleStudents = useMemo(() => {
+    const needle = singleSearch.trim().toLowerCase();
+    const digits = singleSearch.trim().replace(/\D/g, '');
+    return students
+      .filter((student) => !singleClass || student.class_name === singleClass)
+      .filter((student) => {
+        if (!needle) return true;
+        const name = student.full_name.toLowerCase();
+        const admission = (student.admission_number ?? '').toLowerCase();
+        const admissionDigits = (student.admission_number ?? '').replace(/\D/g, '');
+        const matchChallan = savedChallans.some((challan) => {
+          if (challan.student_id !== student.id) return false;
+          const number = (challan.challan_number ?? '').toLowerCase();
+          const derived = challanDisplayNumber(challan).toLowerCase();
+          return number.includes(needle) || derived.includes(needle);
+        });
+        return name.includes(needle)
+          || admission.includes(needle)
+          || (digits && admissionDigits === digits)
+          || matchChallan;
+      })
+      .slice(0, 50);
+  }, [students, singleClass, singleSearch, savedChallans]);
 
   const drafts: ChallanDraft[] = useMemo(() => targets.map((student) => {
     const base = draftFor(student, structureFor(student), Number(student.fee_balance ?? 0));
@@ -196,14 +225,58 @@ export function ChallanTab({ students, structures, classList, sectionsFor, month
                 </label>
               </>
             ) : (
-              <label className="control-field"><span>Student</span>
-                <select value={singleId} onChange={(event) => setSingleId(event.target.value)}>
-                  <option value="">Select a student</option>
-                  {students.map((student) => <option key={student.id} value={student.id}>{student.full_name} — {student.class_name} · {student.section_name}</option>)}
-                </select>
-              </label>
+              <>
+                <label className="control-field"><span>Class</span>
+                  <select value={singleClass} onChange={(event) => setSingleClass(event.target.value)}>
+                    <option value="">All classes</option>
+                    {classList.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
+                <label className="control-field"><span>Search</span>
+                  <input
+                    type="text"
+                    value={singleSearch}
+                    onChange={(event) => setSingleSearch(event.target.value)}
+                    placeholder="Admission no., name, or challan no."
+                  />
+                </label>
+                <label className="control-field"><span>Student</span>
+                  <select value={singleId} onChange={(event) => setSingleId(event.target.value)}>
+                    <option value="">Select a student</option>
+                    {singleStudents.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.full_name} — {student.class_name} · {student.section_name}
+                        {student.admission_number ? ` · ${student.admission_number}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
           </div>
+
+          {mode === 'single' && singleSearch.trim() && (
+            <div className="fee-quick-pick">
+              {singleStudents.length === 0 ? (
+                <p className="fee-empty">No students match "{singleSearch}".</p>
+              ) : (
+                singleStudents.map((student) => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    className={`fee-quick-pick-row ${singleId === student.id ? 'selected' : ''}`}
+                    onClick={() => { setSingleId(student.id); setSingleSearch(''); }}
+                  >
+                    <span className="fee-quick-pick-name">{student.full_name}</span>
+                    <span className="fee-quick-pick-meta">
+                      {student.class_name} · {student.section_name}
+                      {student.admission_number ? ` · ${student.admission_number}` : ''}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
 
           {drafts.length === 0 ? (
             <p className="fee-empty">No students selected yet. Choose a class, a section, or one student to build the challan.</p>
