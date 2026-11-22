@@ -1,29 +1,11 @@
 import { whatsappLink, type AlertSendMode } from '@/lib/whatsapp';
 
-// One named tab is reused for a whole batch, so bulk sending leaves a single tab open
-// instead of one tab per student.
-const SENDER_WINDOW = 'whatsapp_sender';
-
 export type OpenResult = { ok: boolean; link: string };
 
-// Claims the reusable tab while the click still counts as a user action. Without this
-// the first send, which happens after the alert log is written, can look like a blocked
-// pop-up. Returns the tab so the caller can close it if nothing ends up being sent.
-export function primeWhatsAppWindow(mode: AlertSendMode): Window | null {
-  if (mode !== 'web') return null;
-  const existing = window.open('', SENDER_WINDOW);
-  existing?.focus();
-  return existing;
-}
-
-export function closeWhatsAppWindow(handle: Window | null): void {
-  try {
-    handle?.close();
-  } catch {
-    // A window the browser already took over cannot be closed; nothing to do.
-  }
-}
-
+// Opens a WhatsApp chat with the message pre-filled. The real wa.me URL is opened
+// directly — no blank tab is created first — so a blocked pop-up leaves nothing
+// behind. When the browser blocks the window, ok is false and the caller can show
+// the returned link as a clickable fallback.
 export function openWhatsAppChat(
   phone: string | null,
   message: string,
@@ -43,19 +25,6 @@ export function openWhatsAppChat(
     return { ok: true, link };
   }
 
-  // A tab left open by an earlier send is steered to the new chat rather than a second
-  // tab being opened.
-  const reused = window.open('', SENDER_WINDOW);
-  if (reused && !reused.closed) {
-    try {
-      reused.location.href = link;
-      reused.focus();
-      return { ok: true, link };
-    } catch {
-      // The tab belongs to WhatsApp Web, which cannot be read back; opening by name
-      // below still reuses it.
-    }
-  }
-  const opened = window.open(link, SENDER_WINDOW);
+  const opened = window.open(link, '_blank', 'noopener,noreferrer');
   return { ok: Boolean(opened), link };
 }

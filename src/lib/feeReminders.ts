@@ -3,7 +3,7 @@ import { SCHOOL_NAME } from '@/lib/noticeText';
 import { formatMoney, monthLabel } from '@/lib/fees';
 import { queueSmsMessages, updateSmsStatus } from '@/lib/smsLog';
 import { pickWhatsAppContact } from '@/lib/whatsapp';
-import { closeWhatsAppWindow, openWhatsAppChat, primeWhatsAppWindow } from '@/lib/whatsappQueue';
+import { openWhatsAppChat } from '@/lib/whatsappQueue';
 import { supabase } from '@/lib/supabase';
 import type { Student } from '@/lib/schoolTypes';
 
@@ -17,7 +17,20 @@ export function feeReminderMessage(student: Student, due: number, month: string)
   ].join('\n');
 }
 
-export type ReminderResult = { sent: number; skipped: number; error: string | null };
+export type BlockedReminder = {
+  studentId: string;
+  studentName: string;
+  phone: string;
+  link: string;
+  message: string;
+};
+
+export type ReminderResult = {
+  sent: number;
+  skipped: number;
+  error: string | null;
+  blocked: BlockedReminder[];
+};
 
 // Posts a fee reminder notification into the portal so it appears in both the Parent
 // Portal and the Student Portal. The database unique index on
@@ -36,23 +49,23 @@ async function createPortalReminder(student: Student, due: number, today: string
 
 // Sends fee reminders through the school's existing WhatsApp route. Each message is
 // logged first (so a send that fails is still visible in the SMS report) and only
-// students with a usable contact number are messaged.
+// students with a usable contact number are messaged. When the browser blocks the
+// pop-up, the reminder link is returned so the caller can show a clickable fallback.
 export async function sendFeeReminders(targets: Student[], month: string, today: string): Promise<ReminderResult> {
-  if (targets.length === 0) return { sent: 0, skipped: 0, error: null };
+  if (targets.length === 0) return { sent: 0, skipped: 0, error: null, blocked: [] };
 
   let sendMode: 'web' | 'desktop' = 'web';
   try { sendMode = await fetchAbsenteeSendMode(); } catch { sendMode = 'web'; }
 
-  const senderWindow: Window | null = null;
   let sent = 0;
   let skipped = 0;
-  let primed = false;
+  const blocked: BlockedReminder[] = [];
 
   for (const student of targets) {
     const contact = pickWhatsAppContact(student);
     if (!contact.number) { skipped += 1; continue; }
-    if (!primed) { primeWhatsAppWindow(sendMode); primed = true; }
-    const body = feeReminderMessage(student, Math.max(0, Number(student.fee_balance ?? 0)), month);
+    const due = Math.max(0, Number(student.fee_balance ?? 0));
+    const body = feeReminderMessage(student, due, month);
     const { ids, error } = await queueSmsMessages([{
       student_id: student.id,
       student_name: student.full_name,
@@ -63,17 +76,23 @@ export async function sendFeeReminders(targets: Student[], month: string, today:
       message_body: body,
       attendance_date: today,
     }]);
-    if (error) { if (senderWindow) closeWhatsAppWindow(senderWindow); return { sent, skipped, error }; }
+    if (error) return { sent, skipped, error, blocked };
     const result = openWhatsAppChat(contact.number, body, sendMode);
-    await updateSmsStatus(ids, result.ok ? 'sent' : 'failed', result.ok ? `WhatsApp opened (${sendMode})` : 'WhatsApp window was blocked');
     if (result.ok) {
       sent += 1;
-      await createPortalReminder(student, Math.max(0, Number(student.fee_balance ?? 0)), today);
+      await updateSmsStatus(ids, 'sent', `WhatsApp opened (${sendMode})`);
+      await createPortalReminder(student, due, today);
     } else {
-      skipped += 1;
+      await updateSmsStatus(ids, 'failed', 'WhatsApp window was blocked');
+      blocked.push({
+        studentId: student.id,
+        studentName: student.full_name,
+        phone: contact.number,
+        link: result.link,
+        message: body,
+      });
     }
   }
 
-  if (sent === 0 && senderWindow) closeWhatsAppWindow(senderWindow);
-  return { sent, skipped, error: null };
+  return { sent, skipped, error: null, blocked };
 }

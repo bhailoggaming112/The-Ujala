@@ -22,6 +22,8 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
   const [minDue, setMinDue] = useState('');
   const [sendingId, setSendingId] = useState('');
   const [preview, setPreview] = useState<Student | null>(null);
+  const [blocked, setBlocked] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
+  const [copied, setCopied] = useState('');
 
   const classList = useMemo(() => Array.from(new Set(students.map((student) => student.class_name))).sort(), [students]);
   const sectionList = useMemo(() => Array.from(new Set(
@@ -53,8 +55,11 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
     if (targets.length === 0) return;
     const result = await sendFeeReminders(targets, month, today);
     if (result.error) { onToast(result.error); return; }
-    const note = result.skipped > 0 ? ` ${result.skipped} skipped — check the saved contact numbers.` : '';
-    onToast(`${result.sent} fee reminder${result.sent === 1 ? '' : 's'} sent to WhatsApp.${note}`);
+    if (result.blocked.length > 0) setBlocked(result.blocked);
+    const parts = [`${result.sent} fee reminder${result.sent === 1 ? '' : 's'} sent to WhatsApp.`];
+    if (result.skipped > 0) parts.push(`${result.skipped} skipped — check the saved contact numbers.`);
+    if (result.blocked.length > 0) parts.push(`${result.blocked.length} blocked — use the links below to open them.`);
+    onToast(parts.join(' '));
   };
 
   const exportList = () => {
@@ -131,6 +136,48 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
           </div>
         )}
       </section>
+
+      {blocked.length > 0 && (
+        <div className="notice-overlay" onClick={() => setBlocked([])}>
+          <section className="notice-modal fee-blocked-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="notice-preview-top">
+              <span className="eyebrow">WhatsApp was blocked by your browser</span>
+              <button className="close-button" onClick={() => setBlocked([])} aria-label="Close">×</button>
+            </div>
+            <p className="fee-blocked-intro">Your browser blocked the automatic WhatsApp pop-up. Click each link below to open the reminder chat directly.</p>
+            <ul className="fee-blocked-list">
+              {blocked.map((row) => (
+                <li key={row.phone + row.studentName}>
+                  <div className="fee-blocked-row">
+                    <strong>{row.studentName}</strong>
+                    <small>{row.phone}</small>
+                  </div>
+                  <div className="fee-blocked-actions">
+                    <a className="primary-button" href={row.link} target="_blank" rel="noopener noreferrer">
+                      <Send size={14} /> Open WhatsApp
+                    </a>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(row.message).then(() => {
+                          setCopied(row.phone + row.studentName);
+                          setTimeout(() => setCopied(''), 2000);
+                        }).catch(() => {});
+                      }}
+                    >
+                      {copied === row.phone + row.studentName ? 'Copied!' : 'Copy message'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="notice-preview-actions">
+              <button className="secondary-button" onClick={() => setBlocked([])}>Done</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {preview && (
         <div className="notice-overlay" onClick={() => setPreview(null)}>

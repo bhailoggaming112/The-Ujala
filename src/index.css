@@ -1868,6 +1868,16 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 .acct-void-row .fee-mono { text-decoration: line-through; }
 .acct-ledger-modal { max-width: 820px; width: min(820px, 94vw); }
 .acct-reminder-preview { margin-top: 12px; padding: 14px; border-radius: 12px; background: #f6f9fa; border: 1px solid #e7eef1; font: 12px/1.6 'DM Sans', sans-serif; color: #526b7b; white-space: pre-wrap; }
+
+.fee-blocked-modal { width: min(540px, 94vw); }
+.fee-blocked-intro { margin: 10px 0 14px; font-size: 12.5px; color: #526b7b; line-height: 1.6; }
+.fee-blocked-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fee-blocked-list li { padding: 12px 14px; border-radius: 12px; background: #f6f9fa; border: 1px solid #e7eef1; }
+.fee-blocked-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.fee-blocked-row strong { font: 700 13px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; }
+.fee-blocked-row small { font-size: 11px; color: #7b8f9b; font-variant-numeric: tabular-nums; }
+.fee-blocked-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.fee-blocked-actions .primary-button { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 .fee-void-warning { display: flex; gap: 9px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fff4f1; color: #a8483a; font-size: 12px; }
 .fee-void-warning svg { flex: 0 0 auto; margin-top: 1px; }
 

@@ -19,7 +19,7 @@ import {
   type FeeChallan, type FeePayment, type FeeStructure, type PaymentMethod, type PaymentSettings,
 } from '@/lib/fees';
 import { pickWhatsAppContact, whatsappNumberWarning } from '@/lib/whatsapp';
-import { closeWhatsAppWindow, openWhatsAppChat, primeWhatsAppWindow } from '@/lib/whatsappQueue';
+import { openWhatsAppChat } from '@/lib/whatsappQueue';
 import { supabase } from '@/lib/supabase';
 
 export type FeeTab = 'overview' | 'collection' | 'challan' | 'defaulters' | 'structure' | 'reports';
@@ -129,17 +129,22 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
       return latest;
     }, null);
 
+  const [blockedReminders, setBlockedReminders] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
+
   // One reminder can be sent from a row; the batch button sends to everyone on screen.
+  // The wa.me URL is opened directly — no blank tab is created first — so a blocked
+  // pop-up leaves nothing behind. When the browser blocks the window the reminder link
+  // is collected so the caller can show a clickable fallback.
   const sendReminders = async (targets: Student[]) => {
     if (targets.length === 0) return;
-    let senderWindow: Window | null = null;
     let sent = 0;
     let skipped = 0;
+    const blocked: { studentName: string; phone: string; link: string; message: string }[] = [];
     for (const student of targets) {
       const contact = pickWhatsAppContact(student);
       if (!contact.number) { skipped += 1; continue; }
-      if (!senderWindow) senderWindow = primeWhatsAppWindow(sendMode);
-      const body = reminderMessage(student, Math.max(0, Number(student.fee_balance ?? 0)), currentMonth);
+      const due = Math.max(0, Number(student.fee_balance ?? 0));
+      const body = reminderMessage(student, due, currentMonth);
       const { ids, error } = await queueSmsMessages([{
         student_id: student.id,
         student_name: student.full_name,
@@ -150,23 +155,28 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
         message_body: body,
         attendance_date: today,
       }]);
-      if (error) { closeWhatsAppWindow(senderWindow); onToast(error); return; }
+      if (error) { onToast(error); return; }
       const result = openWhatsAppChat(contact.number, body, sendMode);
-      await updateSmsStatus(ids, result.ok ? 'sent' : 'failed', result.ok ? `WhatsApp opened (${sendMode})` : 'WhatsApp window was blocked');
       if (result.ok) {
         sent += 1;
+        await updateSmsStatus(ids, 'sent', `WhatsApp opened (${sendMode})`);
         try {
           await supabase.rpc('create_fee_reminder_notification', {
             p_student_id: student.id,
-            p_due_amount: Math.max(0, Number(student.fee_balance ?? 0)),
+            p_due_amount: due,
             p_reminder_date: today,
           });
         } catch { /* portal notification is convenience, not a gate */ }
-      } else { skipped += 1; }
+      } else {
+        await updateSmsStatus(ids, 'failed', 'WhatsApp window was blocked');
+        blocked.push({ studentName: student.full_name, phone: contact.number, link: result.link, message: body });
+      }
     }
-    if (sent === 0) closeWhatsAppWindow(senderWindow);
-    const note = skipped > 0 ? ` ${skipped} skipped — check the saved contact numbers.` : '';
-    onToast(`${sent} fee reminder${sent === 1 ? '' : 's'} sent to WhatsApp.${note}`);
+    if (blocked.length > 0) setBlockedReminders(blocked);
+    const parts = [`${sent} fee reminder${sent === 1 ? '' : 's'} sent to WhatsApp.`];
+    if (skipped > 0) parts.push(`${skipped} skipped — check the saved contact numbers.`);
+    if (blocked.length > 0) parts.push(`${blocked.length} blocked — use the links below to open them.`);
+    onToast(parts.join(' '));
   };
 
   return (
@@ -227,6 +237,8 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           setChallanMonth={setChallanMonth}
           lastPaymentFor={lastPaymentFor}
           onSend={sendReminders}
+          blockedReminders={blockedReminders}
+          onClearBlocked={() => setBlockedReminders([])}
         />
       )}
 
@@ -709,7 +721,7 @@ function CollectionTab({ students, payments, loading, today, onToast, onSaved }:
   );
 }
 
-function DefaultersTab({ students, classList, sectionsFor, challans, challanMonth, setChallanMonth, lastPaymentFor, onSend }: {
+function DefaultersTab({ students, classList, sectionsFor, challans, challanMonth, setChallanMonth, lastPaymentFor, onSend, blockedReminders, onClearBlocked }: {
   students: Student[];
   classList: string[];
   sectionsFor: (className: string) => string[];
@@ -718,11 +730,14 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
   setChallanMonth: (month: string) => void;
   lastPaymentFor: (studentId: string) => { date: string; amount: number } | null;
   onSend: (targets: Student[]) => Promise<void>;
+  blockedReminders: { studentName: string; phone: string; link: string; message: string }[];
+  onClearBlocked: () => void;
 }) {
   const [classFilter, setClassFilter] = useState('');
   const [sectionFilter, setSectionFilter] = useState('');
   const [search, setSearch] = useState('');
   const [sendingId, setSendingId] = useState('');
+  const [copied, setCopied] = useState('');
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -830,6 +845,48 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
           </div>
         )}
       </section>
+
+      {blockedReminders.length > 0 && (
+        <div className="notice-overlay" onClick={onClearBlocked}>
+          <section className="notice-modal fee-blocked-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="notice-preview-top">
+              <span className="eyebrow">WhatsApp was blocked by your browser</span>
+              <button className="close-button" onClick={onClearBlocked} aria-label="Close">×</button>
+            </div>
+            <p className="fee-blocked-intro">Your browser blocked the automatic WhatsApp pop-up. Click each link below to open the reminder chat directly.</p>
+            <ul className="fee-blocked-list">
+              {blockedReminders.map((row) => (
+                <li key={row.phone + row.studentName}>
+                  <div className="fee-blocked-row">
+                    <strong>{row.studentName}</strong>
+                    <small>{row.phone}</small>
+                  </div>
+                  <div className="fee-blocked-actions">
+                    <a className="primary-button" href={row.link} target="_blank" rel="noopener noreferrer">
+                      <Send size={14} /> Open WhatsApp
+                    </a>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(row.message).then(() => {
+                          setCopied(row.phone + row.studentName);
+                          setTimeout(() => setCopied(''), 2000);
+                        }).catch(() => {});
+                      }}
+                    >
+                      {copied === row.phone + row.studentName ? 'Copied!' : 'Copy message'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="notice-preview-actions">
+              <button className="secondary-button" onClick={onClearBlocked}>Done</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

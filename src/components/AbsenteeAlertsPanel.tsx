@@ -15,7 +15,7 @@ import {
   alertWordingFrom, defaultWordingFor, type AlertTemplates,
 } from '@/lib/alertStatuses';
 import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, uploadAbsenteeAttachment, type AlertSendMode } from '@/lib/whatsapp';
-import { closeWhatsAppWindow, openWhatsAppChat, primeWhatsAppWindow } from '@/lib/whatsappQueue';
+import { openWhatsAppChat } from '@/lib/whatsappQueue';
 
 const SEND_MODES: { value: AlertSendMode; label: string; hint: string; icon: typeof Globe }[] = [
   { value: 'web', label: 'WhatsApp Web', hint: 'One browser tab is reused for every alert', icon: Globe },
@@ -268,9 +268,6 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       return;
     }
     cancelSend.current = false;
-    // The reusable tab is claimed now, while the click still counts as a user action,
-    // so the first send is not treated as a blocked pop-up.
-    const senderWindow = primeWhatsAppWindow(sendMode);
     setSending(true);
     setSendProgress({ done: 0, total: sendable.length });
     setBlocked([]);
@@ -299,7 +296,6 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     if (log.error) {
       setSending(false);
       setSendProgress(null);
-      closeWhatsAppWindow(senderWindow);
       onToast('The alerts could not be logged, so nothing was sent. Please try again.');
       return;
     }
@@ -340,7 +336,6 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened in ${sendMode === 'desktop' ? 'the WhatsApp Desktop app' : 'WhatsApp Web'} and recorded in the WhatsApp SMS Report.`);
     } else {
       await supabase.from('school_sms_log').delete().in('id', log.ids);
-      closeWhatsAppWindow(senderWindow);
       onToast('Sending stopped. Nothing was sent.');
     }
     if (sentIds.length > 0) {
