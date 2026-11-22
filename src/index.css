@@ -1928,10 +1928,12 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 .ack-head img { width: 46px; height: 46px; object-fit: contain; }
 .ack-head h2 { margin: 0; font: 800 17px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #1d3c4d; letter-spacing: -.4px; }
 .ack-head span { font-size: 10px; text-transform: uppercase; letter-spacing: 1.6px; color: #2f6d86; font-weight: 700; }
+.ack-head .ack-title { display: inline-block; margin-top: 3px; padding: 3px 12px; border-radius: 7px; background: #eef8fa; border: 1px solid #cfe8ef; font: 800 13px 'Plus Jakarta Sans', 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 1.4px; color: #1d5a73; }
 .ack-paper.thermal .ack-head { gap: 8px; }
 .ack-paper.thermal .ack-head img { width: 34px; height: 34px; }
 .ack-paper.thermal .ack-head h2 { font-size: 13px; }
 .ack-paper.thermal .ack-head span { font-size: 8px; letter-spacing: 1.2px; }
+.ack-paper.thermal .ack-head .ack-title { font-size: 10px; padding: 2px 8px; }
 
 .ack-identity { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; padding: 12px 0; border-bottom: 1px dashed #dde8ec; }
 .ack-identity > div { display: flex; justify-content: space-between; gap: 10px; font-size: 11.5px; }
@@ -1971,11 +1973,15 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 .print-fee-receipt .print-remarks p { margin: 0; font-size: 10px; color: #132a3a; }
 .print-fee-receipt .print-timestamp { margin: 10px 0 0; padding-top: 6px; border-top: 1px dashed #c3d0d8; font-size: 8.5px; color: #5a6b76; text-align: right; }
 
+/* Prominent Acknowledgment title in the printed receipt header. */
+.print-fee-receipt .print-ack-title { display: inline-block; margin-top: 3px; padding: 2px 10px; border: 1.2px solid #2f6d86; border-radius: 5px; font: 800 11px 'Plus Jakarta Sans', 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 1.4px; color: #1d5a73; background: #eef8fa; }
+
 @media print {
   .print-fee-receipt.ack-roll { font-size: 10px; }
   .print-fee-receipt.ack-roll .print-header { border-bottom-width: 1.5px; gap: 6px; padding-bottom: 5px; margin-bottom: 6px; }
   .print-fee-receipt.ack-roll .print-header-copy h1 { font-size: 12px; }
   .print-fee-receipt.ack-roll .print-header-copy p { font-size: 8.5px; }
+  .print-fee-receipt.ack-roll .print-ack-title { font-size: 9px; padding: 1px 6px; }
   .print-fee-receipt.ack-roll .print-row { padding: 3px 0; }
   .print-fee-receipt.ack-roll .print-columns { display: block; }
   .print-fee-receipt.ack-roll .print-columns > div + div { margin-top: 8px; }

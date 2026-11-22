@@ -50,6 +50,8 @@ function ReceiptSheet({ payment, student, summary, layout, onLogo }: {
     { label: 'Class / Section', value: student ? `${student.class_name} / ${student.section_name}` : `${payment.class_name ?? '—'} / ${payment.section_name ?? '—'}` },
   ];
   const due = payment.due_fee ?? summary?.totalPayable ?? Number(payment.amount) + Number(payment.balance_after);
+  const payable = payableFee(due, payment.fine_amount, payment.concession, payment.discount);
+  const balance = Math.max(0, payable - Number(payment.amount));
 
   return (
     <section className={`print-only print-fee-receipt ${layout === 'a5' ? 'ack-a5' : 'ack-roll'}`}>
@@ -60,7 +62,7 @@ function ReceiptSheet({ payment, student, summary, layout, onLogo }: {
         <SchoolMark onSettled={onLogo} />
         <div className="print-header-copy">
           <h1>{SCHOOL_NAME}</h1>
-          <p>Acknowledgment Receipt</p>
+          <p className="print-ack-title">Acknowledgment Receipt</p>
         </div>
         <div className="print-header-admitted">
           <span>Receipt No.</span>
@@ -84,9 +86,9 @@ function ReceiptSheet({ payment, student, summary, layout, onLogo }: {
           <div className="print-row"><span className="print-row-label">Fine / Late Fee</span><span className="print-row-value">{formatMoney(payment.fine_amount)}</span></div>
           <div className="print-row"><span className="print-row-label">Fee Concession</span><span className="print-row-value">−{formatMoney(payment.concession)}</span></div>
           {payment.discount > 0 && <div className="print-row"><span className="print-row-label">Discount</span><span className="print-row-value">−{formatMoney(payment.discount)}</span></div>}
-          <div className="print-row total"><span className="print-row-label">Total Fee Payable</span><span className="print-row-value">{formatMoney(payableFee(due, payment.fine_amount, payment.concession, payment.discount))}</span></div>
+          <div className="print-row total"><span className="print-row-label">Total Fee Payable</span><span className="print-row-value">{formatMoney(payable)}</span></div>
           <div className="print-row"><span className="print-row-label">Fee Paid</span><span className="print-row-value">{formatMoney(payment.amount)}</span></div>
-          <div className="print-row total"><span className="print-row-label">Balance</span><span className="print-row-value">{formatMoney(payment.balance_after)}</span></div>
+          <div className="print-row total"><span className="print-row-label">Balance</span><span className="print-row-value">{formatMoney(balance)}</span></div>
         </div>
       </div>
       <div className="print-remarks">
@@ -119,14 +121,16 @@ export function FeeReceiptView({ payment, student, summary, onClose }: {
   ));
 
   const due = payment.due_fee ?? summary?.totalPayable ?? Number(payment.amount) + Number(payment.balance_after);
+  const payable = payableFee(due, payment.fine_amount, payment.concession, payment.discount);
+  const balance = Math.max(0, payable - Number(payment.amount));
   const lines: { label: string; value: string; tone?: string }[] = [
     { label: 'Due Fee', value: formatMoney(due) },
     { label: 'Fine / Late Fee', value: formatMoney(payment.fine_amount) },
     { label: 'Fee Concession', value: `−${formatMoney(payment.concession)}` },
     ...(payment.discount > 0 ? [{ label: 'Discount', value: `−${formatMoney(payment.discount)}` }] : []),
-    { label: 'Total Fee Payable', value: formatMoney(payableFee(due, payment.fine_amount, payment.concession, payment.discount)), tone: 'strong' },
+    { label: 'Total Fee Payable', value: formatMoney(payable), tone: 'strong' },
     { label: 'Fee Paid', value: formatMoney(payment.amount), tone: 'credit' },
-    { label: 'Balance', value: formatMoney(payment.balance_after), tone: 'strong' },
+    { label: 'Balance', value: formatMoney(balance), tone: 'strong' },
   ];
   const identity: [string, string][] = [
     ['Adm. No.', student?.admission_number ?? payment.admission_number ?? '—'],
@@ -170,7 +174,7 @@ export function FeeReceiptView({ payment, student, summary, onClose }: {
             <img src="/New_LOGO_Final.PNG" alt="" />
             <div>
               <h2>{SCHOOL_NAME}</h2>
-              <span>Acknowledgment</span>
+              <span className="ack-title">Acknowledgment Receipt</span>
             </div>
           </div>
 
