@@ -19,6 +19,7 @@ import { AccountantReports } from '@/components/AccountantReports';
 import { AccountantDailyClosing } from '@/components/AccountantDailyClosing';
 import { AccountantAttendanceReport } from '@/components/AccountantAttendanceReport';
 import { StudentSearch } from '@/components/StudentSearch';
+import { ProfilePhotoPicker } from '@/components/ProfilePhoto';
 
 export type AccountantView =
   | 'dashboard' | 'fees' | 'receive' | 'ledger' | 'defaulters'
@@ -206,6 +207,7 @@ export function AccountantPortal({ onToast }: { onToast: (message: string) => vo
       {view === 'profile' && (
         <section className="fee-card">
           <div className="fee-card-head"><div><span className="eyebrow">Read-only</span><h2>My account</h2></div></div>
+          <div className="profile-photo-panel"><ProfilePhotoPicker onToast={onToast} size="lg" /></div>
           <dl className="fee-summary">
             <div><dt>Full name</dt><dd>{profile?.full_name ?? '—'}</dd></div>
             <div><dt>Username</dt><dd>{profile?.username ?? '—'}</dd></div>

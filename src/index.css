@@ -2675,3 +2675,33 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .utility-bar-btn { padding: 7px 9px; }
   .utility-bar { padding-left: 8px; }
 }
+
+/* --- Profile photos ----------------------------------------------------------
+   Signed-in users (Admin, Accountant, Teacher) can attach a photo. It shows in
+   the top avatar and inside the profile dropdown / My Profile screen. */
+.profile-avatar { position: relative; width: 34px; height: 34px; background: #f5c8aa; border-radius: 50%; display: grid; place-items: center; color: #8c5f4d; font: 700 11px 'Plus Jakarta Sans'; border: 3px solid #fae8de; overflow: hidden; flex: 0 0 auto; }
+.profile-avatar-lg { width: 64px; height: 64px; font-size: 18px; border-width: 3px; }
+.profile-avatar-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+.profile-photo-picker { display: flex; align-items: center; gap: 12px; }
+.profile-photo-picker-sm { align-items: center; }
+.profile-photo-picker-sm .profile-avatar { flex: 0 0 auto; }
+.profile-photo-picker .profile-photo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.profile-photo-caption { color: #93a5af; font-size: 11px; }
+.profile-photo-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #cfe2e9; background: #f5fafb; color: #2f7d93; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 700; transition: background .16s ease, border-color .16s ease; }
+.profile-photo-btn:hover:not(:disabled) { background: #eaf6f9; border-color: #a8d2dd; }
+.profile-photo-btn:disabled { opacity: .6; cursor: wait; }
+.profile-photo-btn.remove { border-color: #f3d3cb; background: #fff6f3; color: #c15a4c; }
+.profile-photo-btn.remove:hover:not(:disabled) { background: #ffe9e3; }
+
+.profile-photo-panel { padding: 16px 20px; border-bottom: 1px solid #eef3f5; margin-bottom: 16px; }
+.profile-photo-picker-lg { gap: 16px; }
+
+/* In the popover the picker sits as its own row and stacks the actions tidily. */
+.profile-menu .profile-photo-picker { padding: 10px 0; border-bottom: 1px solid #edf2f4; margin-bottom: 8px; }
+.profile-menu .profile-photo-btn { padding: 5px 9px; font-size: 10.5px; }
+
+@media (max-width: 760px) {
+  .profile-photo-panel { padding: 14px 16px; }
+  .profile-photo-picker-lg { flex-direction: row; }
+}

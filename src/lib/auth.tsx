@@ -12,6 +12,7 @@ export type UserProfile = {
   role: UserRole;
   status: UserStatus;
   created_at: string;
+  photo_url: string | null;
 };
 
 type AuthContextValue = {
@@ -22,6 +23,7 @@ type AuthContextValue = {
   signIn: (username: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateProfilePhoto: (photoUrl: string) => Promise<{ error: string | null }>;
   bootstrapAdmin: (username: string, password: string, fullName: string) => Promise<{ error: string | null }>;
 };
 
@@ -40,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, full_name, role, status, created_at')
+        .select('id, username, full_name, role, status, created_at, photo_url')
         .eq('id', userId)
         .maybeSingle();
       if (error) return null;
@@ -151,10 +153,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateProfilePhoto = async (photoUrl: string): Promise<{ error: string | null }> => {
+    if (!session?.user?.id) return { error: 'You are not signed in.' };
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ photo_url: photoUrl })
+        .eq('id', session.user.id);
+      if (error) return { error: 'Could not update your photo. Please try again.' };
+      setProfile((prev) => (prev ? { ...prev, photo_url: photoUrl } : prev));
+      return { error: null };
+    } catch {
+      return { error: 'Could not reach the school server. Check your connection and try again.' };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       session, user: session?.user ?? null, profile, loading,
-      signIn, signOut, refreshProfile, bootstrapAdmin,
+      signIn, signOut, refreshProfile, updateProfilePhoto, bootstrapAdmin,
     }}>
       {children}
     </AuthContext.Provider>
