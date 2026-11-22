@@ -469,7 +469,7 @@ function CreateUserModal({ students, onClose, onCreated, onToast }: {
   );
 }
 
-function ResetPasswordModal({ user, onClose, onToast }: {
+export function ResetPasswordModal({ user, onClose, onToast }: {
   user: UserProfile;
   onClose: () => void;
   onToast: (message: string) => void;
@@ -523,7 +523,7 @@ function ResetPasswordModal({ user, onClose, onToast }: {
   );
 }
 
-function ResetUsernameModal({ user, onClose, onSaved, onToast }: {
+export function ResetUsernameModal({ user, onClose, onSaved, onToast }: {
   user: UserProfile;
   onClose: () => void;
   onSaved: () => void;

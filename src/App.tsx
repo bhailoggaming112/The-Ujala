@@ -26,6 +26,7 @@ import {
   UserPlus,
   Users,
   UserRoundX,
+  UsersRound,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SCHOOL_NAME } from '@/lib/noticeText';
@@ -45,6 +46,7 @@ import { AuthProvider, useAuth, type UserRole } from '@/lib/auth';
 import { SchoolDataProvider, useSchoolData, type AddStudentResult, type Attendance } from '@/lib/schoolData';
 import { AuthPage } from '@/components/AuthPage';
 import { AdminPanel } from '@/components/AdminPanel';
+import { StaffManagement } from '@/components/StaffManagement';
 import { SectionManager } from '@/components/SectionManager';
 import { AttendanceManager } from '@/components/AttendanceManager';
 import { AbsenteeAlertsPanel } from '@/components/AbsenteeAlertsPanel';
@@ -64,7 +66,7 @@ import {
   type PortalCredentials,
 } from '@/lib/portalAccounts';
 
-type View = 'dashboard' | 'students' | 'admission' | 'sections' | 'attendance' | 'sms' | 'promotions' | 'fees' | 'withdrawals' | 'certificates' | 'other' | 'reports' | 'settings' | 'users';
+type View = 'dashboard' | 'students' | 'admission' | 'sections' | 'attendance' | 'sms' | 'promotions' | 'fees' | 'staff' | 'withdrawals' | 'certificates' | 'other' | 'reports' | 'settings' | 'users';
 
 const adminNavItems: { label: string; icon: typeof LayoutDashboard; view: View }[] = [
   { label: 'Dashboard', icon: LayoutDashboard, view: 'dashboard' },
@@ -75,6 +77,7 @@ const adminNavItems: { label: string; icon: typeof LayoutDashboard; view: View }
   { label: 'Send Absentee WhatsApp SMS', icon: MessageCircle, view: 'sms' },
   { label: 'Promote Students', icon: GraduationCap, view: 'promotions' },
   { label: 'Fee Management', icon: Coins, view: 'fees' },
+  { label: 'Staff Management', icon: UsersRound, view: 'staff' },
   { label: 'Withdraw Students', icon: UserRoundX, view: 'withdrawals' },
   { label: 'Issue Certificate', icon: FileBadge2, view: 'certificates' },
   { label: 'Other Information', icon: BookOpenCheck, view: 'other' },
@@ -238,7 +241,8 @@ function AppInner() {
   }
 
   const showAdminUsers = view === 'users' && profile.role === 'admin';
-  const splitPoint = isStaff ? 4 : 8;
+  const showStaffManagement = view === 'staff' && profile.role === 'admin';
+  const splitPoint = isStaff ? 4 : 9;
 
   return (
     <div className="app-shell">
@@ -253,7 +257,7 @@ function AppInner() {
 
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Signed in</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
-        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} onAlertsChanged={refreshAlertCount} loading={loading} loadError={dataError} />}
+        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : showStaffManagement ? <StaffManagement onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} onAlertsChanged={refreshAlertCount} loading={loading} loadError={dataError} />}
         {toast && <div className="toast"><Check size={17} /> {toast}</div>}
         {credentials && <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />}
         {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={setToast} />}
@@ -364,7 +368,7 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
   const addToSession = async () => { await saveAdmission({ ...form, data_source: 'current_session' }); };
   const toggleSelected = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const actionLabel = view === 'withdrawals' ? 'Withdraw selected' : view === 'certificates' ? 'Issue certificate' : '';
-  const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely WhatsApp note to guardians of absent students.', promotions: 'Review each student’s next class, record the final term result, and promote with a saved condition where needed.', fees: 'Collect fees, generate challans, follow up on dues and review collection reports.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
+  const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely WhatsApp note to guardians of absent students.', promotions: 'Review each student’s next class, record the final term result, and promote with a saved condition where needed.', fees: 'Collect fees, generate challans, follow up on dues and review collection reports.', staff: 'Add and manage the logins for your teachers, office assistants and accountants.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
   return <div className="page module-page"><div className="module-heading"><div><span className="eyebrow">School workspace</span><h1>{title}</h1><p>{pageDescription[view]}</p></div>{view === 'students' && <button className="primary-button" onClick={() => setFormOpen(true)}><Plus size={18} /> New admission</button>}{actionLabel && <button className="primary-button" onClick={() => onToast(`${selectedIds.length || 'No'} students selected — ready for the next step`)}><Send size={17} /> {actionLabel}</button>}</div>
     {view === 'admission' || (view === 'students' && formOpen) ? <AdmissionForm form={form} setForm={setForm} infoRecords={infoRecords} onSaveInfo={saveInfoRecord} onDeleteInfo={deleteInfoRecord} onClear={clearAdmission} onSubmit={submitAdmission} onAddToSession={addToSession} onCancel={() => setFormOpen(false)} onToast={onToast} siblingContext={siblingContext} familyLedger={familyLedger} familyStatementInfo={familyStatementInfo} onAutoGenerate={() => { void (async () => { const number = await fetchNextAdmissionNumber(); setForm({ ...form, admission_number: number }); onToast(`Admission number ${number} generated`); })(); }} /> : null}
     {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} loading={loading} loadError={loadError} onToast={onToast} onRefresh={onRefresh} onCreatedLogin={onCreatedLogin} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : view === 'sms' ? <AbsenteeAlertsPanel onToast={onToast} onQueueChanged={onAlertsChanged} /> : view === 'promotions' ? <PromoteStudentsPanel students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'fees' ? <FeeManagementPanel students={students} onToast={onToast} onRefresh={onRefresh} /> : ['withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></>}</div>}
