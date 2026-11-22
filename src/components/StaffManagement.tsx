@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth, type UserProfile, type UserRole } from '@/lib/auth';
 import { PasswordField } from '@/components/PasswordField';
 import { ResetPasswordModal, ResetUsernameModal } from '@/components/AdminPanel';
+import { StaffAttendanceTab } from '@/components/StaffAttendanceTab';
 import {
   generatePassword,
   provisionPortalAccount,
@@ -32,6 +33,7 @@ export function StaffManagement({ onToast }: { onToast: (message: string) => voi
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [showCreate, setShowCreate] = useState(false);
+  const [tab, setTab] = useState<'directory' | 'attendance'>('directory');
   const [resetTarget, setResetTarget] = useState<UserProfile | null>(null);
   const [usernameTarget, setUsernameTarget] = useState<UserProfile | null>(null);
 
@@ -94,6 +96,19 @@ export function StaffManagement({ onToast }: { onToast: (message: string) => voi
         </div>
       </div>
 
+      <div className="att-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'directory'} className={`att-tab ${tab === 'directory' ? 'active' : ''}`} onClick={() => setTab('directory')}>
+          Staff directory
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'attendance'} className={`att-tab ${tab === 'attendance' ? 'active' : ''}`} onClick={() => setTab('attendance')}>
+          Daily attendance
+        </button>
+      </div>
+
+      {tab === 'attendance' ? (
+        <StaffAttendanceTab onToast={onToast} staff={users} />
+      ) : (
+        <>
       <div className="admin-stats">
         <div className="admin-stat"><Briefcase size={20} /><strong>{users.length}</strong><span>Total staff</span></div>
         <div className="admin-stat admin-stat-teacher"><GraduationCap size={20} /><strong>{countOf('teacher')}</strong><span>Teachers</span></div>
@@ -180,6 +195,8 @@ export function StaffManagement({ onToast }: { onToast: (message: string) => voi
           )}
         </div>
       </div>
+        </>
+      )}
 
       {showCreate && (
         <AddStaffModal
