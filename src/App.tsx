@@ -11,9 +11,12 @@ import {
   GraduationCap,
   KeyRound,
   LayoutDashboard,
+  Lock,
   LogOut,
   MessageCircle,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Send,
@@ -55,6 +58,7 @@ import { ExaminationModule } from '@/components/ExaminationModule';
 import { FinanceModule } from '@/components/FinanceModule';
 import { UtilityToolsModule } from '@/components/UtilityToolsModule';
 import { SystemSetupModule } from '@/components/SystemSetupModule';
+import { LockScreen } from '@/components/LockScreen';
 import { SectionManager } from '@/components/SectionManager';
 import { AttendanceManager } from '@/components/AttendanceManager';
 import { AbsenteeAlertsPanel } from '@/components/AbsenteeAlertsPanel';
@@ -136,6 +140,8 @@ function AppInner() {
   const [credentials, setCredentials] = useState<PortalCredentials[] | null>(null);
   const [waitingAlerts, setWaitingAlerts] = useState(0);
   const [alertCountToken, setAlertCountToken] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const canSendAlerts = profile?.role === 'admin' || ['teacher', 'office_assistant'].includes(profile?.role ?? '');
 
   // The sidebar badge shows how many absentee alerts are still waiting today.
@@ -272,7 +278,7 @@ function AppInner() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar${minimized ? ' minimized' : ''}`}>
         <div className="brand"><div className="brand-mark"><img src="/New_LOGO_Final.PNG" alt="SchoolDesk" /></div><span>School<span className="brand-accent">Desk</span></span></div>
         <NeonClock />
         <p className="nav-label">Workspace</p>
@@ -282,11 +288,12 @@ function AppInner() {
       </aside>
 
       <main className="main-content">
-        <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Signed in</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+        <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Signed in</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div><div className="utility-bar" role="group" aria-label="Window controls"><button className="utility-bar-btn" type="button" onClick={() => setLocked(true)} title="Lock Screen" aria-label="Lock Screen"><Lock size={15} /><span>Lock Screen</span></button><button className="utility-bar-btn" type="button" onClick={() => setMinimized(v => !v)} title="Minimize sidebar" aria-label="Minimize">{minimized ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}<span>Minimize</span></button></div></div></header>
         {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : showStaffManagement ? <StaffManagement onToast={setToast} /> : showExamination ? <ExaminationModule students={students} onToast={setToast} /> : showFinance ? <FinanceModule onToast={setToast} /> : showUtility ? <UtilityToolsModule onToast={setToast} /> : showSystemSetup ? <SystemSetupModule onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} onAlertsChanged={refreshAlertCount} loading={loading} loadError={dataError} />}
         {toast && <div className="toast"><Check size={17} /> {toast}</div>}
         {credentials && <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />}
         {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={setToast} />}
+        {locked && <LockScreen fullName={profile.full_name} onUnlock={() => setLocked(false)} onSignOut={() => void signOut()} />}
       </main>
     </div>
   );
