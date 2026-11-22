@@ -1,5 +1,11 @@
+import { useEffect, useRef, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import type { AdmissionFormState } from '@/lib/schoolTypes';
-import { concessionAmountFor, concessionPercentageFor, netTuitionFor } from '@/lib/admissionFees';
+import {
+  applyClassTuitionFee, concessionAmountFor, concessionPercentageFor, netTuitionFor, tuitionFeeForClass,
+  type FeeStructureRow,
+} from '@/lib/admissionFees';
+import { fetchFeeStructures } from '@/lib/fees';
 import { DropdownWithAdd } from '@/components/DropdownWithAdd';
 
 type TextField = 'current_address' | 'permanent_address' | 'father_contact_number' | 'messaging_number' | 'whatsapp_number' | 'guardian_relationship' | 'guardian_cnic';
@@ -19,7 +25,85 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
   const text = (key: TextField, label: string) => (
     <label key={key}>{label}<input value={form[key]} onChange={(event) => update(key, event.target.value)} /></label>
   );
+
+  const [structures, setStructures] = useState<FeeStructureRow[]>([]);
+  const [structuresLoading, setStructuresLoading] = useState(true);
+  const [structuresError, setStructuresError] = useState('');
+  const lastClassRef = useRef(form.class_name);
+
+  const loadStructures = async () => {
+    setStructuresLoading(true);
+    const result = await fetchFeeStructures();
+    setStructuresLoading(false);
+    setStructuresError(result.error ?? '');
+    setStructures(result.structures);
+  };
+
+  useEffect(() => { void loadStructures(); }, []);
+
+  // The class rate is applied when the class changes, and once when the structure
+  // first arrives for a student who has no tuition fee saved yet. Manual edits after
+  // that are kept as typed.
+  useEffect(() => {
+    const classChanged = lastClassRef.current !== form.class_name;
+    lastClassRef.current = form.class_name;
+    if (structures.length === 0) return;
+    if (!classChanged && form.tuition_fee.trim() !== '') return;
+    const patchValues = applyClassTuitionFee(form, structures);
+    if (Object.keys(patchValues).length > 0) patch(patchValues);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.class_name, structures]);
+
+  const classRate = tuitionFeeForClass(structures, form.class_name);
   const net = netTuitionFor(form.tuition_fee, form.fee_concession_amount);
+  const overConcession = net !== null && Number(form.fee_concession_amount) > Number(form.tuition_fee);
+  const concessionValue = Number(form.fee_concession_amount) || 0;
+  const concessionPercentValue = Number(form.fee_concession_percentage) || 0;
+
+  // Editing the tuition fee re-applies the recorded concession to it, keeping whichever
+  // of the two concession fields the office typed in as the source of truth.
+  const changeTuition = (value: string) => {
+    const tuition = Number(value) || 0;
+    const enteredAmount = Number(form.fee_concession_amount) || 0;
+    const hasPercent = form.fee_concession_percentage.trim() !== '';
+    const hasAmount = form.fee_concession_amount.trim() !== '';
+
+    if (hasPercent) {
+      const concession = concessionAmountFor(value, form.fee_concession_percentage);
+      patch({ tuition_fee: value, fee_concession_amount: concession, net_tuition_fee: String(Math.max(0, tuition - (Number(concession) || 0))) });
+      return;
+    }
+    if (hasAmount) {
+      const clamped = Math.min(Math.max(enteredAmount, 0), Math.max(tuition, 0));
+      patch({
+        tuition_fee: value,
+        fee_concession_amount: String(clamped),
+        fee_concession_percentage: concessionPercentageFor(value, String(clamped)),
+        net_tuition_fee: String(Math.max(0, tuition - clamped)),
+      });
+      return;
+    }
+    patch({ tuition_fee: value, net_tuition_fee: String(Math.max(0, tuition)) });
+  };
+
+  const changePercentage = (value: string) => {
+    const concession = concessionAmountFor(form.tuition_fee, value);
+    const net = netTuitionFor(form.tuition_fee, concession);
+    patch({
+      fee_concession_percentage: value,
+      fee_concession_amount: concession,
+      net_tuition_fee: net === null ? '' : String(net),
+    });
+  };
+
+  const changeAmount = (value: string) => {
+    const net = netTuitionFor(form.tuition_fee, value);
+    patch({
+      fee_concession_amount: value,
+      fee_concession_percentage: concessionPercentageFor(form.tuition_fee, value),
+      net_tuition_fee: net === null ? '' : String(net),
+    });
+  };
 
   return (
     <div className="form-grid admission-info-grid">
@@ -46,30 +130,54 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
 
       <div className="form-section-title">Fees and concessions</div>
       <label>Monthly Tuition Fee (Rs)
-        <input type="number" min="0" step="0.01" value={form.tuition_fee} onChange={(event) => patch({ tuition_fee: event.target.value, fee_concession_amount: concessionAmountFor(event.target.value, form.fee_concession_percentage) })} />
+        <input type="number" min="0" step="0.01" value={form.tuition_fee} onChange={(event) => changeTuition(event.target.value)} />
+        <span className="mt-1 block text-xs font-normal text-slate-500">
+          {structuresLoading
+            ? 'Checking the fee structure for this class…'
+            : classRate === null
+              ? `No tuition fee is set for ${form.class_name || 'this class'} in the Fee Structure. You can type one in.`
+              : `Filled from ${form.class_name} in the Fee Structure (${formatRupees(classRate)}). You can change it.`}
+        </span>
+        {structuresError && (
+          <button type="button" className="secondary-button mt-2" onClick={() => void loadStructures()}>
+            <RefreshCw size={14} /> Retry
+          </button>
+        )}
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label>Concession (%)
-          <input type="number" min="0" max="100" step="0.01" value={form.fee_concession_percentage} onChange={(event) => patch({ fee_concession_percentage: event.target.value, fee_concession_amount: concessionAmountFor(form.tuition_fee, event.target.value) })} />
+          <input type="number" min="0" max="100" step="0.01" value={form.fee_concession_percentage} onChange={(event) => changePercentage(event.target.value)} />
         </label>
         <label>Concession (Rs)
-          <input type="number" min="0" step="0.01" value={form.fee_concession_amount} onChange={(event) => patch({ fee_concession_amount: event.target.value, fee_concession_percentage: concessionPercentageFor(form.tuition_fee, event.target.value) })} />
+          <input type="number" min="0" step="0.01" value={form.fee_concession_amount} onChange={(event) => changeAmount(event.target.value)} />
         </label>
       </div>
+      <p className="col-span-full -mt-2 text-xs text-slate-500">
+        Type in either field — the other one is worked out for you. Concessions apply to the tuition fee only.
+      </p>
       <div className="col-span-full grid grid-cols-1 gap-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4 sm:grid-cols-3">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tuition fee</span>
           <strong className="mt-1 block text-base text-slate-800">{form.tuition_fee ? formatRupees(Number(form.tuition_fee)) : '—'}</strong>
         </div>
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Concession</span>
-          <strong className="mt-1 block text-base text-slate-800">{form.fee_concession_amount ? formatRupees(Number(form.fee_concession_amount)) : 'None'}</strong>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Concession{concessionValue > 0 && concessionPercentValue > 0 ? ` (${concessionPercentValue}%)` : ''}
+          </span>
+          <strong className="mt-1 block text-base text-slate-800">{concessionValue > 0 ? formatRupees(concessionValue) : 'None'}</strong>
         </div>
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payable each month</span>
-          <strong className="mt-1 block text-base text-sky-700">{net === null ? 'Enter a tuition fee' : formatRupees(net)}</strong>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actual / Net Tuition Fee</span>
+          <strong className={`mt-1 block text-base ${overConcession ? 'text-rose-600' : 'text-sky-700'}`}>
+            {net === null ? 'Enter a tuition fee' : formatRupees(net)}
+          </strong>
         </div>
       </div>
+      {overConcession && (
+        <p className="col-span-full text-xs font-semibold text-rose-600">
+          The concession is more than the tuition fee, so the net tuition fee is shown as Rs 0.
+        </p>
+      )}
       <div className="col-span-full flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4">
         <div>
           <strong className="block text-sm text-slate-800">Fine exemption</strong>

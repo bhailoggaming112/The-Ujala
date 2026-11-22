@@ -43,6 +43,7 @@ export type Student = {
   tuition_fee?: number | null;
   fee_concession_percentage?: number | null;
   fee_concession_amount?: number | null;
+  net_tuition_fee?: number | null;
   fine_exempt?: boolean | null;
   // Leaving Info
   leaving_date?: string | null;
@@ -240,6 +241,7 @@ export type AdmissionFormState = {
   tuition_fee: string;
   fee_concession_percentage: string;
   fee_concession_amount: string;
+  net_tuition_fee: string;
   fine_exempt: boolean;
   // Leaving Info
   leaving_date: string;

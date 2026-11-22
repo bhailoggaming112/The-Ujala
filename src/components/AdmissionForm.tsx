@@ -122,6 +122,8 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
             ['Religion', form.religion],
             ['Place of Birth', form.place_of_birth],
             ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
+            ['Concession', form.fee_concession_amount ? `Rs ${Number(form.fee_concession_amount).toLocaleString()}${form.fee_concession_percentage ? ` (${Number(form.fee_concession_percentage)}%)` : ''}` : ''],
+            ['Actual / Net Tuition Fee', form.net_tuition_fee ? `Rs ${Number(form.net_tuition_fee).toLocaleString()}` : ''],
           ])}
         </div>
       </section>
