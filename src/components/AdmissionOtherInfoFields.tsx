@@ -8,6 +8,7 @@ import {
 import { fetchFeeStructures } from '@/lib/fees';
 import type { SiblingContext } from '@/lib/feeDiscountRules';
 import type { FamilyLedger } from '@/lib/familyLedger';
+import type { FamilyStatementInfo } from '@/lib/familyStatement';
 import { FamilyLedgerPanel } from '@/components/FamilyLedgerPanel';
 import { DropdownWithAdd } from '@/components/DropdownWithAdd';
 
@@ -17,7 +18,7 @@ const textareaClass = 'mt-2 w-full rounded-lg border border-slate-200 bg-white p
 
 const formatRupees = (value: number) => `Rs ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions, onOptionsChanged, onToast, siblingContext = null, familyLedger = null }: {
+export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions, onOptionsChanged, onToast, siblingContext = null, familyLedger = null, familyStatementInfo = null }: {
   form: AdmissionFormState;
   update: (key: keyof AdmissionFormState, value: string) => void;
   patch: (changes: Partial<AdmissionFormState>) => void;
@@ -26,6 +27,7 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
   onToast: (message: string) => void;
   siblingContext?: SiblingContext | null;
   familyLedger?: FamilyLedger | null;
+  familyStatementInfo?: FamilyStatementInfo | null;
 }) {
   const text = (key: TextField, label: string) => (
     <label key={key}>{label}<input value={form[key]} onChange={(event) => update(key, event.target.value)} /></label>
@@ -232,9 +234,11 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
         </div>
       </div>
 
-      {familyLedger && (
+      {familyLedger && familyStatementInfo && (
         <FamilyLedgerPanel
           ledger={familyLedger}
+          statementInfo={familyStatementInfo}
+          onToast={onToast}
           familyLabel={siblingContext?.matchedReason
             ? `Matched on ${siblingContext.matchedReason}. Brothers and sisters are listed oldest admission first.`
             : 'Brothers and sisters are listed oldest admission first.'}

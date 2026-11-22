@@ -1,5 +1,9 @@
-import { AlertTriangle, Users } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Download, FileText, Users } from 'lucide-react';
 import type { FamilyLedger } from '@/lib/familyLedger';
+import { downloadCsv } from '@/lib/fees';
+import { FamilyFeeStatementModal } from '@/components/FamilyFeeStatementModal';
+import { familyStatementCsv, familyStatementFilename, type FamilyStatementInfo } from '@/lib/familyStatement';
 
 const money = (value: number) => `Rs ${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
@@ -8,7 +12,14 @@ const headClassRight = `${headClass} text-right`;
 
 // The family's combined fee position, shown beside the sibling discount so the office can
 // see at a glance what the whole family is charged and what they still owe before saving.
-export function FamilyLedgerPanel({ ledger, familyLabel }: { ledger: FamilyLedger; familyLabel: string }) {
+export function FamilyLedgerPanel({ ledger, familyLabel, statementInfo, onToast }: { ledger: FamilyLedger; familyLabel: string; statementInfo: FamilyStatementInfo; onToast: (message: string) => void }) {
+  const [statementOpen, setStatementOpen] = useState(false);
+
+  const download = () => {
+    downloadCsv(familyStatementFilename(statementInfo), familyStatementCsv(ledger, statementInfo));
+    onToast('Family fee statement downloaded.');
+  };
+
   return (
     <section className="col-span-full overflow-hidden rounded-xl border border-slate-200">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
@@ -19,9 +30,17 @@ export function FamilyLedgerPanel({ ledger, familyLabel }: { ledger: FamilyLedge
             <span className="text-xs text-slate-500">{familyLabel}</span>
           </div>
         </div>
-        <div className="text-right">
-          <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Family total per month</span>
-          <strong className="text-base tabular-nums text-slate-800">{money(ledger.totalMonthly)}</strong>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="secondary-button" onClick={() => setStatementOpen(true)}>
+            <FileText size={15} /> Fee statement
+          </button>
+          <button type="button" className="secondary-button" onClick={download}>
+            <Download size={15} /> Download CSV
+          </button>
+          <div className="text-right">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Family total per month</span>
+            <strong className="text-base tabular-nums text-slate-800">{money(ledger.totalMonthly)}</strong>
+          </div>
         </div>
       </header>
 
@@ -93,6 +112,8 @@ export function FamilyLedgerPanel({ ledger, familyLabel }: { ledger: FamilyLedge
             : `${ledger.pendingRuleCount} children are not yet receiving the sibling discount their place in the family calls for. Re-save those students to apply it.`}
         </p>
       )}
+
+      {statementOpen && <FamilyFeeStatementModal ledger={ledger} info={statementInfo} onClose={() => setStatementOpen(false)} />}
     </section>
   );
 }

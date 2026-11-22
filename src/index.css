@@ -767,6 +767,94 @@ input[dir="rtl"]:focus {
   .print-student-record .print-fee-section { margin-top: 10px; }
   .print-student-record .print-signatures,
   .print-fee-receipt .print-signatures { margin-top: 30px; }
+
+  /* --- Family fee statement: a formal one-sheet statement for the parents --- */
+  .print-sheet-root .print-only.print-family-statement {
+    display: flex;
+    flex-direction: column;
+    min-height: 273mm;
+    box-sizing: border-box;
+    font-family: 'Plus Jakarta Sans', 'DM Sans', 'Inter', sans-serif;
+    color: #132a3a;
+  }
+  .print-family-statement .print-header { border-bottom: 2.5px solid #132a3a; gap: 14px; }
+  .print-family-statement .print-header img { width: 52px; height: 52px; }
+  .print-family-statement .print-header h1 { font-size: 19px; letter-spacing: -.4px; color: #132a3a; }
+  .print-family-statement .print-header p {
+    margin-top: 3px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    color: #5a6b76;
+    font-weight: 600;
+  }
+
+  .print-family-statement .print-card {
+    border: 1px solid #c3d0d8;
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-sizing: border-box;
+    overflow: hidden;
+    margin-bottom: 14px;
+    break-inside: avoid;
+  }
+  .print-family-statement .print-card h2 {
+    margin: 0 0 9px;
+    padding-bottom: 6px;
+    border-bottom: 1.5px solid #dbe4e9;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.1px;
+    color: #2f6d86;
+  }
+  .print-family-statement .print-card-statement-party .print-other-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 20px;
+  }
+  .print-family-statement .print-row { border-bottom: 0; padding: 5px 0; align-items: baseline; }
+  .print-family-statement .print-row-label { color: #5a6b76; font-weight: 600; }
+  .print-family-statement .print-row-value { color: #132a3a; font-weight: 600; word-break: break-word; }
+
+  .print-family-statement .print-card-statement-table { flex: 1 1 auto; display: flex; flex-direction: column; }
+  .print-statement-table { width: 100%; border-collapse: collapse; }
+  .print-statement-table th,
+  .print-statement-table td { border: 1px solid #c3d0d8; padding: 6px 8px; font-size: 10px; text-align: left; vertical-align: top; }
+  .print-statement-table th { background: #eef6f8; color: #2f6d86; text-transform: uppercase; letter-spacing: .7px; font-size: 8.5px; }
+  .print-statement-table tfoot td { font-weight: 800; background: #f7fbfc; }
+  .print-statement-sub { display: block; color: #6f8592; font-size: 8.5px; font-weight: 600; }
+
+  .print-family-statement .print-statement-note {
+    margin: 9px 0 0;
+    font-size: 9px;
+    line-height: 1.55;
+    color: #5a6b76;
+  }
+
+  .print-family-statement .print-statement-total {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 4px;
+  }
+  .print-family-statement .print-statement-total > div {
+    flex: 1;
+    border: 1.5px solid #132a3a;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .print-family-statement .print-statement-total span {
+    display: block;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #5a6b76;
+    font-weight: 700;
+  }
+  .print-family-statement .print-statement-total strong { display: block; margin-top: 4px; font-size: 17px; color: #132a3a; }
+
+  .print-family-statement .print-sign-space { flex: 1 1 auto; min-height: 8mm; }
+  .print-family-statement .print-signatures { margin-top: auto; gap: 90px; padding-top: 18mm; }
+  .print-family-statement .print-signature { font-size: 10.5px; }
 }
 
 /* ==========================================================================

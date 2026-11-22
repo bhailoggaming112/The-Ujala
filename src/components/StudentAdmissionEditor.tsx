@@ -8,6 +8,7 @@ import type { InformationDraft } from '@/components/InformationRecords';
 import { findSiblingGroups } from '@/lib/feeAdjustments';
 import { fetchSiblingDiscountRules, siblingContextFor, type SiblingDiscountRule } from '@/lib/feeDiscountRules';
 import { buildFamilyLedger } from '@/lib/familyLedger';
+import type { FamilyStatementInfo } from '@/lib/familyStatement';
 import { fetchFeeStructures, type FeeStructure } from '@/lib/fees';
 
 export function StudentAdmissionEditor({ student, students, onClose, onSaved, onToast }: { student: Student; students: Student[]; onClose: () => void; onSaved: () => Promise<void>; onToast: (message: string) => void }) {
@@ -53,6 +54,16 @@ export function StudentAdmissionEditor({ student, students, onClose, onSaved, on
     () => buildFamilyLedger(siblingContext.students, siblingContext.candidateIndex, siblingRules, structures),
     [siblingContext, siblingRules, structures],
   );
+
+  // Who the printed statement is addressed to. It follows what is typed on the form, so a
+  // corrected guardian name or phone appears on the statement straight away.
+  const familyStatementInfo = useMemo<FamilyStatementInfo>(() => ({
+    guardianName: form.guardian_name.trim() || form.fathers_name.trim(),
+    guardianPhone: form.guardian_phone.trim() || form.father_contact_number.trim() || form.messaging_number.trim(),
+    guardianCnic: form.guardian_cnic.trim() || form.fathers_cnic.trim(),
+    preparedFor: form.full_name.trim(),
+    matchedReason: siblingContext.matchedReason,
+  }), [form, siblingContext.matchedReason]);
 
   const saveInfo = async (draft: InformationDraft) => {
     const payload = { information_type: draft.information_type, notes: draft.notes, updated_at: new Date().toISOString() };
@@ -100,6 +111,7 @@ export function StudentAdmissionEditor({ student, students, onClose, onSaved, on
           onToast={onToast}
           siblingContext={siblingContext}
           familyLedger={familyLedger}
+          familyStatementInfo={familyStatementInfo}
         />
       </div>
     </div>
