@@ -100,9 +100,11 @@ export function whatsappLink(
   if (mode === 'desktop') {
     return phone ? `whatsapp://send?phone=${phone}&text=${text}` : `whatsapp://send?text=${text}`;
   }
+  // wa.me links open cleanly on both mobile and desktop WhatsApp without an
+  // intermediate "about:blank" or landing page.
   return phone
-    ? `https://web.whatsapp.com/send?phone=${phone}&text=${text}`
-    : `https://web.whatsapp.com/send?text=${text}`;
+    ? `https://wa.me/${phone}?text=${text}`
+    : `https://wa.me/?text=${text}`;
 }
 
 export function attachmentError(file: File): string | null {

@@ -172,6 +172,8 @@ export function StudentDashboard({ onToast }: { onToast: (message: string) => vo
   const [student, setStudent] = useState<Student | null>(null);
   const [summary, setSummary] = useState<{ present: number; absent: number; late: number }>({ present: 0, absent: 0, late: 0 });
   const [results, setResults] = useState<{ subject: string; obtained: number; total: number }[]>([]);
+  const [notifications, setNotifications] = useState<PortalNotification[]>([]);
+  const [noticeError, setNoticeError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -204,6 +206,11 @@ export function StudentDashboard({ onToast }: { onToast: (message: string) => vo
 
         if (!active) return;
         setStudent(record as Student | null);
+
+        const notices = await fetchPortalNotifications([studentId]);
+        if (!active) return;
+        setNotifications(notices.notifications);
+        setNoticeError(notices.error);
 
         const counts = { present: 0, absent: 0, late: 0 };
         for (const row of (attendance as { status: string }[]) ?? []) {
@@ -253,6 +260,41 @@ export function StudentDashboard({ onToast }: { onToast: (message: string) => vo
           Request a correction
         </button>
       </div>
+
+      <section className="panel parent-notices-panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">Attendance and fee notifications</span>
+            <h2>Notices from the school</h2>
+            <p className="panel-subtitle">A notice appears here as soon as the school records you as absent, on leave or late, or issues a fee reminder.</p>
+          </div>
+          <Bell size={20} />
+        </div>
+        {noticeError && <p className="dmc-warning">{noticeError}</p>}
+        {notifications.length === 0 ? (
+          <p className="empty-state">No notices yet. When you are marked absent, on leave or late, or a fee reminder is sent, the details will appear here.</p>
+        ) : (
+          <ul className="parent-notice-list">
+            {notifications.map((notice) => (
+              <li className="parent-notice" key={notice.id}>
+                <span className="parent-notice-icon"><Bell size={15} /></span>
+                <div>
+                  <div className="parent-notice-top">
+                    <strong>{notice.title}</strong>
+                    <small>{new Date(notice.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</small>
+                  </div>
+                  <p>{notice.body}</p>
+                  {notice.attachment_url && (
+                    <a className="parent-notice-attachment" href={notice.attachment_url} target="_blank" rel="noreferrer">
+                      <Paperclip size={13} /> View the document attached to this notice
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="parent-children-grid">
         <section className="panel parent-child-card">

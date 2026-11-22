@@ -20,6 +20,7 @@ import {
 } from '@/lib/fees';
 import { pickWhatsAppContact, whatsappNumberWarning } from '@/lib/whatsapp';
 import { closeWhatsAppWindow, openWhatsAppChat, primeWhatsAppWindow } from '@/lib/whatsappQueue';
+import { supabase } from '@/lib/supabase';
 
 export type FeeTab = 'overview' | 'collection' | 'challan' | 'defaulters' | 'structure' | 'reports';
 
@@ -152,7 +153,16 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
       if (error) { closeWhatsAppWindow(senderWindow); onToast(error); return; }
       const result = openWhatsAppChat(contact.number, body, sendMode);
       await updateSmsStatus(ids, result.ok ? 'sent' : 'failed', result.ok ? `WhatsApp opened (${sendMode})` : 'WhatsApp window was blocked');
-      if (result.ok) sent += 1; else skipped += 1;
+      if (result.ok) {
+        sent += 1;
+        try {
+          await supabase.rpc('create_fee_reminder_notification', {
+            p_student_id: student.id,
+            p_due_amount: Math.max(0, Number(student.fee_balance ?? 0)),
+            p_reminder_date: today,
+          });
+        } catch { /* portal notification is convenience, not a gate */ }
+      } else { skipped += 1; }
     }
     if (sent === 0) closeWhatsAppWindow(senderWindow);
     const note = skipped > 0 ? ` ${skipped} skipped — check the saved contact numbers.` : '';
