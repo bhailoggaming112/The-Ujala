@@ -2516,3 +2516,69 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
   .print-fin-report .print-signatures { display: flex; justify-content: space-between; gap: 40px; margin-top: auto; padding-top: 20mm; }
   .print-fin-report .print-signature { font-size: 10.5px; }
 }
+
+/* ==========================================================================
+   Utility & Tools module
+   ========================================================================== */
+.util-form { background: #f7fbfc; border: 1px solid #e6eef2; border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
+.util-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.util-form .control-field input,
+.util-form .control-field select,
+.util-form .control-field textarea { border: 1px solid #dfe9ed; border-radius: 9px; padding: 9px 10px; color: #405a6b; background: #fcfefe; outline: none; font: 12px 'DM Sans', sans-serif; font-weight: 400; width: 100%; box-sizing: border-box; }
+.util-form .control-field input:focus,
+.util-form .control-field select:focus,
+.util-form .control-field textarea:focus { border-color: #71bfd4; box-shadow: 0 0 0 3px #dff4f8; }
+.util-form-grid .control-field textarea { resize: vertical; min-height: 60px; }
+.util-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+.utility-module .fee-filters .control-field input,
+.utility-module .fee-filters .control-field select { border: 1px solid #dfe9ed; border-radius: 9px; padding: 9px 10px; color: #405a6b; background: #fcfefe; outline: none; font: 12px 'DM Sans', sans-serif; font-weight: 400; }
+.utility-module .fee-filters .control-field input:focus,
+.utility-module .fee-filters .control-field select:focus { border-color: #71bfd4; box-shadow: 0 0 0 3px #dff4f8; }
+
+.util-status-select { font-size: 11px; font-weight: 700; border: 1px solid #d5e7ec; border-radius: 8px; padding: 4px 8px; color: #2e4759; background: white; cursor: pointer; }
+
+.util-ann-list { display: flex; flex-direction: column; gap: 12px; }
+.util-ann-card { border: 1px solid #e9f0f3; border-radius: 14px; padding: 16px 18px; background: white; transition: opacity .2s ease; }
+.util-ann-card.inactive { opacity: .55; }
+.util-ann-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.util-ann-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.util-ann-title-row strong { font-size: 14px; color: #2e4759; }
+.util-ann-body { margin: 6px 0 8px; color: #536a79; font-size: 12.5px; line-height: 1.5; }
+.util-ann-meta { display: flex; gap: 10px; }
+
+.util-sms-list { display: flex; flex-direction: column; gap: 12px; }
+.util-sms-card { border: 1px solid #e9f0f3; border-radius: 14px; padding: 14px 18px; background: white; }
+.util-sms-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.util-sms-title { display: flex; align-items: center; gap: 8px; }
+.util-sms-title strong { font-size: 13px; color: #2e4759; }
+.util-sms-text { margin: 0; color: #536a79; font-size: 12.5px; line-height: 1.5; }
+.util-sms-edit textarea { width: 100%; resize: vertical; min-height: 70px; border: 1px solid #d5e7ec; border-radius: 10px; padding: 10px; font-size: 12.5px; color: #2e4759; }
+.util-sms-edit .fee-row-actions { margin-top: 10px; justify-content: flex-end; }
+
+.util-tt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.util-tt-day { border: 1px solid #e9f0f3; border-radius: 14px; padding: 14px 16px; background: white; }
+.util-tt-day-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eef3f5; }
+.util-tt-day-head strong { font-size: 13px; color: #2e4759; }
+.util-tt-day-head .fee-mono { margin-left: auto; }
+.util-tt-periods { display: flex; flex-direction: column; gap: 8px; }
+.util-tt-period { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: #f7fbfc; transition: background .15s ease; }
+.util-tt-period:hover { background: #eef8fa; }
+.util-tt-period-info { display: flex; align-items: center; gap: 10px; }
+.util-tt-num { font-size: 10px; font-weight: 800; color: #2f88a3; background: #eaf6f9; border-radius: 6px; padding: 3px 7px; flex: 0 0 auto; }
+.util-tt-period-info strong { font-size: 12px; color: #2e4759; display: block; }
+.util-tt-period-info small { font-size: 10px; color: #93a5af; }
+
+.util-report-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.util-report-status { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: 14px; background: #f7fbfc; border: 1px solid #e9f0f3; }
+.util-report-status span { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: #8598a4; font-weight: 700; }
+.util-report-status strong { font: 800 22px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; letter-spacing: -.5px; }
+
+.utility-module .admin-header { margin-bottom: 20px; }
+.utility-module .admin-header h2 { font: 800 22px 'Plus Jakarta Sans', 'DM Sans', sans-serif; color: #2e4759; letter-spacing: -.6px; margin: 6px 0 8px; }
+.utility-module .admin-header p { color: #8598a4; font-size: 13px; margin: 0; }
+
+@media (max-width: 760px) {
+  .util-form-grid { grid-template-columns: 1fr; }
+  .util-tt-grid { grid-template-columns: 1fr; }
+}
