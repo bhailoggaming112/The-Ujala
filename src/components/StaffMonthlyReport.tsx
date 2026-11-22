@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Info, Search, TrendingDown } from 'lucide-react';
+import { ChevronRight, Info, Search, TrendingDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { UserProfile } from '@/lib/auth';
 import {
@@ -9,8 +9,9 @@ import {
   isLowAttendance,
   monthRange,
 } from '@/lib/attendance';
+import { StaffAttendanceDetail, type StaffAttendanceDay } from '@/components/StaffAttendanceDetail';
 
-type StaffAttendanceRow = { staff_user_id: string; attendance_date: string; status: string };
+type StaffAttendanceRow = { staff_user_id: string; attendance_date: string; status: string; note: string | null };
 
 type Tally = { total: number; present: number; absent: number; late: number; leave: number };
 
@@ -59,6 +60,7 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
   const [records, setRecords] = useState<StaffAttendanceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailFor, setDetailFor] = useState<UserProfile | null>(null);
 
   const { start, end } = monthRange(year, monthIndex);
 
@@ -69,7 +71,7 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
       try {
         const { data, error } = await supabase
           .from('school_staff_attendance')
-          .select('staff_user_id, attendance_date, status')
+          .select('staff_user_id, attendance_date, status, note')
           .gte('attendance_date', start)
           .lte('attendance_date', end);
         if (cancelled) return;
@@ -113,6 +115,16 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
 
   const belowCount = matched.filter((row) => isLowAttendance(row.percentage, appliedThreshold)).length;
   const rows = lowOnly ? matched.filter((row) => isLowAttendance(row.percentage, appliedThreshold)) : matched;
+
+  // Every recorded day for one person, newest first, with whatever note was written.
+  const daysFor = (staffId: string): StaffAttendanceDay[] =>
+    (byStaff.get(staffId) ?? [])
+      .map((record) => ({
+        date: record.attendance_date.slice(0, 10),
+        status: record.status as StaffAttendanceDay['status'],
+        note: record.note,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
 
   const average = rows.length === 0
     ? 0
@@ -207,16 +219,22 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
               <th>Late</th>
               <th>Leave</th>
               <th>Attendance</th>
+              <th />
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} className="muted-cell">Loading this month’s staff register…</td></tr>
+              <tr><td colSpan={9} className="muted-cell">Loading this month’s staff register…</td></tr>
             )}
             {rows.map(({ member, tally, presentTotal, percentage }) => {
               const low = isLowAttendance(percentage, appliedThreshold);
               return (
-                <tr key={member.id} className={low ? 'absent-row' : undefined}>
+                <tr
+                  key={member.id}
+                  className={`clickable-row ${low ? 'absent-row' : ''}`}
+                  onClick={() => setDetailFor(member)}
+                  title={`View ${member.full_name}'s attendance history`}
+                >
                   <td>
                     <div className="att-monthly-student">
                       <div className="student-avatar">{member.full_name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</div>
@@ -238,6 +256,9 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
                       {low && <small><TrendingDown size={12} /> Low</small>}
                     </span>
                   </td>
+                  <td className="text-right">
+                    <ChevronRight size={16} className="ml-auto text-slate-300" />
+                  </td>
                 </tr>
               );
             })}
@@ -255,8 +276,18 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
       <p className="cal-hint">
         <Info size={14} />
         Days recorded is the number of days this person was marked in the register this month. Late arrivals count as present, and
-        leave days are reported separately. A day nobody marked is left out, so it is never counted against anyone.
+        leave days are reported separately. A day nobody marked is left out, so it is never counted against anyone. Click any row to
+        see that person’s day-by-day history and notes.
       </p>
+
+      {detailFor && (
+        <StaffAttendanceDetail
+          member={detailFor}
+          monthLabel={`${MONTH_NAMES[monthIndex]} ${year}`}
+          days={daysFor(detailFor.id)}
+          onClose={() => setDetailFor(null)}
+        />
+      )}
     </div>
   );
 }

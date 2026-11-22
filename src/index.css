@@ -1023,6 +1023,8 @@ input[dir="rtl"]:focus {
 .att-percentage.ok { color: #3f8a60; }
 .att-percentage.low { color: #c15a4c; }
 .att-percentage small { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; background: #fff0eb; color: #c15a4c; border-radius: 20px; padding: 3px 7px; }
+.att-monthly-table tbody tr.clickable-row { cursor: pointer; transition: background-color .15s ease; }
+.att-monthly-table tbody tr.clickable-row:hover { background: #f4fbfd; }
 
 /* --- School calendar settings ------------------------------------------- */
 .cal-settings { display: flex; flex-direction: column; gap: 18px; }
