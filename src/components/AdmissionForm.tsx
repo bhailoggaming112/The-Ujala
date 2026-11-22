@@ -5,6 +5,7 @@ import type { AdmissionFormState, InformationRecord } from '@/lib/schoolTypes';
 import { buildAdmissionCsv } from '@/lib/admissionFormState';
 import { SCHOOL_NAME } from '@/lib/noticeText';
 import { AdmissionOtherInfoFields } from '@/components/AdmissionOtherInfoFields';
+import type { SiblingContext } from '@/lib/feeDiscountRules';
 import { AdmissionDocTabs } from '@/components/AdmissionDocTabs';
 import { DropdownWithAdd } from '@/components/DropdownWithAdd';
 import { InformationRecords, type InformationDraft } from '@/components/InformationRecords';
@@ -24,9 +25,10 @@ type AdmissionFormProps = {
   onCancel: () => void;
   onToast: (message: string) => void;
   onAutoGenerate?: () => void;
+  siblingContext?: SiblingContext | null;
 };
 
-export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false, infoLoadError = false, onSaveInfo, onDeleteInfo, onSubmit, onAddToSession, onClear, onCancel, onToast, onAutoGenerate }: AdmissionFormProps) {
+export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false, infoLoadError = false, onSaveInfo, onDeleteInfo, onSubmit, onAddToSession, onClear, onCancel, onToast, onAutoGenerate, siblingContext = null }: AdmissionFormProps) {
   const update = (key: keyof AdmissionFormState, value: string) => setForm({ ...form, [key]: value });
   const patch = (changes: Partial<AdmissionFormState>) => setForm({ ...form, ...changes });
   const [activeTab, setActiveTab] = useState<'info' | 'other' | 'leaving' | 'submitted' | 'issued'>('info');
@@ -123,6 +125,7 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
             ['Place of Birth', form.place_of_birth],
             ['Monthly Tuition Fee', form.tuition_fee ? `Rs ${Number(form.tuition_fee).toLocaleString()}` : ''],
             ['Concession', form.fee_concession_amount ? `Rs ${Number(form.fee_concession_amount).toLocaleString()}${form.fee_concession_percentage ? ` (${Number(form.fee_concession_percentage)}%)` : ''}` : ''],
+            ['Sibling Discount', form.sibling_discount_percentage ? `${Number(form.sibling_discount_percentage)}%${siblingContext?.ruleLabel ? ` — ${siblingContext.ruleLabel}` : ''}` : ''],
             ['Actual / Net Tuition Fee', form.net_tuition_fee ? `Rs ${Number(form.net_tuition_fee).toLocaleString()}` : ''],
           ])}
         </div>
@@ -190,7 +193,7 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
       <label>Guardian Name<input required value={form.guardian_name} onChange={(event) => update('guardian_name', event.target.value)} /></label>
       <label>Guardian Phone<input required value={form.guardian_phone} onChange={(event) => update('guardian_phone', event.target.value)} /></label>
     </div>}
-    {activeTab === 'other' && <AdmissionOtherInfoFields form={form} update={update} patch={patch} dropdownOptions={dropdownOptions} onOptionsChanged={loadDropdownOptions} onToast={onToast} />}
+    {activeTab === 'other' && <AdmissionOtherInfoFields form={form} update={update} patch={patch} dropdownOptions={dropdownOptions} onOptionsChanged={loadDropdownOptions} onToast={onToast} siblingContext={siblingContext} />}
     {(activeTab === 'leaving' || activeTab === 'submitted' || activeTab === 'issued') && <AdmissionDocTabs tab={activeTab} form={form} update={update} patch={patch} onToast={onToast} />}
     <div className="print-section no-print mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div><span className="eyebrow">Print and export</span><p className="text-sm text-slate-600">Share a copy of this admission form.</p></div>

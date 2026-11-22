@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toStudentFeePayload, validateFeeFields } from '@/lib/admissionFees';
 import { admissionFormFromStudent } from '@/lib/admissionFormState';
 import type { AdmissionFormState, InformationRecord, Student } from '@/lib/schoolTypes';
 import { AdmissionForm } from '@/components/AdmissionForm';
 import type { InformationDraft } from '@/components/InformationRecords';
+import { findSiblingGroups } from '@/lib/feeAdjustments';
+import { fetchSiblingDiscountRules, siblingContextFor, type SiblingDiscountRule } from '@/lib/feeDiscountRules';
 
-export function StudentAdmissionEditor({ student, onClose, onSaved, onToast }: { student: Student; onClose: () => void; onSaved: () => Promise<void>; onToast: (message: string) => void }) {
+export function StudentAdmissionEditor({ student, students, onClose, onSaved, onToast }: { student: Student; students: Student[]; onClose: () => void; onSaved: () => Promise<void>; onToast: (message: string) => void }) {
   const [form, setForm] = useState<AdmissionFormState>(() => admissionFormFromStudent(student));
   const [records, setRecords] = useState<InformationRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recordsError, setRecordsError] = useState(false);
+  const [siblingRules, setSiblingRules] = useState<SiblingDiscountRule[]>([]);
 
   const loadRecords = useCallback(async () => {
     setRecordsLoading(true);
@@ -21,6 +24,26 @@ export function StudentAdmissionEditor({ student, onClose, onSaved, onToast }: {
   }, [student.id]);
 
   useEffect(() => { void loadRecords(); }, [loadRecords]);
+
+  useEffect(() => {
+    void fetchSiblingDiscountRules().then((result) => setSiblingRules(result.rules));
+  }, []);
+
+  // The family groups are built from the roster with this student's saved details, then
+  // this student's own entry is replaced by the version on the form. That way a change to
+  // their guardian phone or father name is reflected before the discount is worked out.
+  const siblingGroups = useMemo(() => {
+    const roster = students.some((row) => row.id === student.id)
+      ? students.map((row) => (row.id === student.id ? { ...row, ...form } as unknown as Student : row))
+      : [...students, { ...student, ...form } as unknown as Student];
+    return findSiblingGroups(roster);
+  }, [students, student, form]);
+
+  const siblingContext = useMemo(() => siblingContextFor({
+    candidate: { ...student, ...form } as unknown as Student,
+    groups: siblingGroups,
+    rules: siblingRules,
+  }), [student, form, siblingGroups, siblingRules]);
 
   const saveInfo = async (draft: InformationDraft) => {
     const payload = { information_type: draft.information_type, notes: draft.notes, updated_at: new Date().toISOString() };
@@ -66,6 +89,7 @@ export function StudentAdmissionEditor({ student, onClose, onSaved, onToast }: {
           onSubmit={submit}
           onCancel={onClose}
           onToast={onToast}
+          siblingContext={siblingContext}
         />
       </div>
     </div>

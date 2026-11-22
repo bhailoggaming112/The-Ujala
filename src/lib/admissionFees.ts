@@ -47,15 +47,27 @@ export function concessionPercentageFor(tuitionFee: string, amount: string) {
   return ((clampConcession(tuition, value) / tuition) * 100).toFixed(2);
 }
 
-// What the family actually pays for tuition each month.
-export function netTuitionFor(tuitionFee: string, amount: string) {
-  const tuition = parseAmount(tuitionFee);
-  if (tuition === null) return null;
-  return Math.max(0, tuition - (parseAmount(amount) ?? 0));
+// The sibling discount is a share of the tuition fee granted from the second child in a
+// family onwards. It is capped by whatever tuition is left after the family's own
+// concession, so the two reductions together never take the payable tuition below zero.
+export function siblingDiscountAmountFor(tuitionFee: string, percentage: string) {
+  const tuition = Math.max(0, parseAmount(tuitionFee) ?? 0);
+  const percent = parseAmount(percentage);
+  if (percent === null || percent <= 0) return 0;
+  return Math.min(tuition, (tuition * Math.min(percent, 100)) / 100);
 }
 
-const netValue = (tuition: string, concession: string) => {
-  const net = netTuitionFor(tuition, concession);
+// What the family actually pays for tuition each month, after the concession and the
+// sibling discount.
+export function netTuitionAfterDiscounts(tuitionFee: string, concession: string, siblingPercentage: string) {
+  const tuition = parseAmount(tuitionFee);
+  if (tuition === null) return null;
+  const remaining = Math.max(0, tuition - (parseAmount(concession) ?? 0));
+  return Math.max(0, remaining - Math.min(siblingDiscountAmountFor(tuitionFee, siblingPercentage), remaining));
+}
+
+const netValue = (tuition: string, concession: string, siblingPercentage: string) => {
+  const net = netTuitionAfterDiscounts(tuition, concession, siblingPercentage);
   return net === null ? '' : String(net);
 };
 
@@ -83,7 +95,7 @@ export function applyClassTuitionFee(form: AdmissionFormState, classList: FeeStr
     tuition_fee: tuition,
     fee_concession_amount: concession,
     fee_concession_percentage: percentage,
-    net_tuition_fee: netValue(tuition, concession),
+    net_tuition_fee: netValue(tuition, concession, form.sibling_discount_percentage),
   };
 }
 
@@ -110,6 +122,7 @@ export function toStudentFeePayload(form: AdmissionFormState) {
     tuition_fee: tuition,
     fee_concession_percentage: parseAmount(form.fee_concession_percentage),
     fee_concession_amount: concession,
-    net_tuition_fee: tuition === null ? null : Math.max(0, tuition - (concession ?? 0)),
+    net_tuition_fee: netTuitionAfterDiscounts(form.tuition_fee, form.fee_concession_amount, form.sibling_discount_percentage),
+    sibling_discount_percentage: parseAmount(form.sibling_discount_percentage),
   };
 }

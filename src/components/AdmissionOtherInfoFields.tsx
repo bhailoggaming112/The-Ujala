@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Users } from 'lucide-react';
 import type { AdmissionFormState } from '@/lib/schoolTypes';
 import {
-  applyClassTuitionFee, concessionAmountFor, concessionPercentageFor, netTuitionFor, tuitionFeeForClass,
-  type FeeStructureRow,
+  applyClassTuitionFee, concessionAmountFor, concessionPercentageFor, netTuitionAfterDiscounts, siblingDiscountAmountFor,
+  tuitionFeeForClass, type FeeStructureRow,
 } from '@/lib/admissionFees';
 import { fetchFeeStructures } from '@/lib/fees';
+import type { SiblingContext } from '@/lib/feeDiscountRules';
 import { DropdownWithAdd } from '@/components/DropdownWithAdd';
 
 type TextField = 'current_address' | 'permanent_address' | 'father_contact_number' | 'messaging_number' | 'whatsapp_number' | 'guardian_relationship' | 'guardian_cnic';
@@ -14,13 +15,14 @@ const textareaClass = 'mt-2 w-full rounded-lg border border-slate-200 bg-white p
 
 const formatRupees = (value: number) => `Rs ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions, onOptionsChanged, onToast }: {
+export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions, onOptionsChanged, onToast, siblingContext = null }: {
   form: AdmissionFormState;
   update: (key: keyof AdmissionFormState, value: string) => void;
   patch: (changes: Partial<AdmissionFormState>) => void;
   dropdownOptions: Record<string, string[]>;
   onOptionsChanged: () => void;
   onToast: (message: string) => void;
+  siblingContext?: SiblingContext | null;
 }) {
   const text = (key: TextField, label: string) => (
     <label key={key}>{label}<input value={form[key]} onChange={(event) => update(key, event.target.value)} /></label>
@@ -54,11 +56,39 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.class_name, structures]);
 
+  // A family detected in the Brother & Sister tab decides which child this student is,
+  // and the discount for that child is filled in automatically. The office can still
+  // overtype it, and the figure is only re-applied when the family or the rules change.
+  const siblingPercentage = siblingContext && siblingContext.discountPercentage > 0 ? String(siblingContext.discountPercentage) : '';
+  useEffect(() => {
+    if (form.sibling_discount_percentage === siblingPercentage) return;
+    const net = netTuitionAfterDiscounts(form.tuition_fee, form.fee_concession_amount, siblingPercentage);
+    patch({
+      sibling_discount_percentage: siblingPercentage,
+      net_tuition_fee: net === null ? '' : String(net),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siblingPercentage, form.tuition_fee, form.fee_concession_amount]);
+
   const classRate = tuitionFeeForClass(structures, form.class_name);
-  const net = netTuitionFor(form.tuition_fee, form.fee_concession_amount);
-  const overConcession = net !== null && Number(form.fee_concession_amount) > Number(form.tuition_fee);
   const concessionValue = Number(form.fee_concession_amount) || 0;
   const concessionPercentValue = Number(form.fee_concession_percentage) || 0;
+  const siblingPercentValue = Number(form.sibling_discount_percentage) || 0;
+  const siblingValue = siblingDiscountAmountFor(form.tuition_fee, form.sibling_discount_percentage);
+  const net = netTuitionAfterDiscounts(form.tuition_fee, form.fee_concession_amount, form.sibling_discount_percentage);
+  const tuitionValue = Number(form.tuition_fee) || 0;
+  const overConcession = form.tuition_fee.trim() !== '' && concessionValue > tuitionValue;
+  const familyDetected = Boolean(siblingContext && siblingContext.siblingOrder > 1);
+
+  // Every change to the tuition fee or the concession also refreshes the sibling
+  // discount and the net tuition fee, so the three figures never drift apart.
+  const withTotals = (changes: Partial<AdmissionFormState>): Partial<AdmissionFormState> => {
+    const tuition = changes.tuition_fee ?? form.tuition_fee;
+    const concession = changes.fee_concession_amount ?? form.fee_concession_amount;
+    const percentage = changes.sibling_discount_percentage ?? form.sibling_discount_percentage;
+    const net = netTuitionAfterDiscounts(tuition, concession, percentage);
+    return { ...changes, net_tuition_fee: net === null ? '' : String(net) };
+  };
 
   // Editing the tuition fee re-applies the recorded concession to it, keeping whichever
   // of the two concession fields the office typed in as the source of truth.
@@ -69,40 +99,33 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
     const hasAmount = form.fee_concession_amount.trim() !== '';
 
     if (hasPercent) {
-      const concession = concessionAmountFor(value, form.fee_concession_percentage);
-      patch({ tuition_fee: value, fee_concession_amount: concession, net_tuition_fee: String(Math.max(0, tuition - (Number(concession) || 0))) });
+      patch(withTotals({ tuition_fee: value, fee_concession_amount: concessionAmountFor(value, form.fee_concession_percentage) }));
       return;
     }
     if (hasAmount) {
       const clamped = Math.min(Math.max(enteredAmount, 0), Math.max(tuition, 0));
-      patch({
+      patch(withTotals({
         tuition_fee: value,
         fee_concession_amount: String(clamped),
         fee_concession_percentage: concessionPercentageFor(value, String(clamped)),
-        net_tuition_fee: String(Math.max(0, tuition - clamped)),
-      });
+      }));
       return;
     }
-    patch({ tuition_fee: value, net_tuition_fee: String(Math.max(0, tuition)) });
+    patch(withTotals({ tuition_fee: value }));
   };
 
   const changePercentage = (value: string) => {
-    const concession = concessionAmountFor(form.tuition_fee, value);
-    const net = netTuitionFor(form.tuition_fee, concession);
-    patch({
+    patch(withTotals({
       fee_concession_percentage: value,
-      fee_concession_amount: concession,
-      net_tuition_fee: net === null ? '' : String(net),
-    });
+      fee_concession_amount: concessionAmountFor(form.tuition_fee, value),
+    }));
   };
 
   const changeAmount = (value: string) => {
-    const net = netTuitionFor(form.tuition_fee, value);
-    patch({
+    patch(withTotals({
       fee_concession_amount: value,
       fee_concession_percentage: concessionPercentageFor(form.tuition_fee, value),
-      net_tuition_fee: net === null ? '' : String(net),
-    });
+    }));
   };
 
   return (
@@ -155,16 +178,48 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
       <p className="col-span-full -mt-2 text-xs text-slate-500">
         Type in either field — the other one is worked out for you. Concessions apply to the tuition fee only.
       </p>
-      <div className="col-span-full grid grid-cols-1 gap-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4 sm:grid-cols-3">
+
+      <div className="col-span-full flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+        <Users size={18} className="mt-0.5 shrink-0 text-emerald-700" />
+        <div className="flex-1">
+          <div className="flex items-baseline justify-between gap-4">
+            <strong className="block text-sm text-emerald-900">Sibling discount</strong>
+            <strong className="text-sm tabular-nums text-emerald-900">{siblingValue > 0 ? formatRupees(siblingValue) : 'None'}</strong>
+          </div>
+          {familyDetected ? (
+            <span className="mt-0.5 block text-xs text-emerald-800">
+              {siblingContext?.matchedReason ? `Family found (${siblingContext.matchedReason}). ` : 'Family found. '}
+              {`This is child ${siblingContext?.siblingOrder} of ${siblingContext?.groupSize}`}
+              {siblingContext?.ruleLabel ? ` — ${siblingContext.ruleLabel}` : ''}
+              {siblingPercentValue > 0 ? `, so ${siblingPercentValue}% is taken off the tuition fee.` : ', which carries no sibling discount.'}
+            </span>
+          ) : (
+            <span className="mt-0.5 block text-xs text-emerald-800">
+              No brothers or sisters are on the roll yet for this family. The discount is applied automatically once a match is found on guardian phone, CNIC, or father / guardian name.
+            </span>
+          )}
+        </div>
+        <label className="w-28 shrink-0">Discount (%)
+          <input type="number" min="0" max="100" step="0.01" value={form.sibling_discount_percentage} onChange={(event) => patch(withTotals({ sibling_discount_percentage: event.target.value }))} />
+        </label>
+      </div>
+
+      <div className="col-span-full grid grid-cols-1 gap-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4 sm:grid-cols-4">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tuition fee</span>
-          <strong className="mt-1 block text-base text-slate-800">{form.tuition_fee ? formatRupees(Number(form.tuition_fee)) : '—'}</strong>
+          <strong className="mt-1 block text-base text-slate-800">{form.tuition_fee ? formatRupees(tuitionValue) : '—'}</strong>
         </div>
         <div>
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Concession{concessionValue > 0 && concessionPercentValue > 0 ? ` (${concessionPercentValue}%)` : ''}
           </span>
           <strong className="mt-1 block text-base text-slate-800">{concessionValue > 0 ? formatRupees(concessionValue) : 'None'}</strong>
+        </div>
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Sibling discount{siblingPercentValue > 0 ? ` (${siblingPercentValue}%)` : ''}
+          </span>
+          <strong className="mt-1 block text-base text-slate-800">{siblingValue > 0 ? formatRupees(siblingValue) : 'None'}</strong>
         </div>
         <div>
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actual / Net Tuition Fee</span>

@@ -222,12 +222,23 @@ export function concessionFor(student: Student, tuition: number): number {
   return 0;
 }
 
+// The sibling discount is a percentage of tuition granted from the second child in a
+// family onwards. It is capped by whatever tuition is left after the student's own
+// concession, so the two reductions together never take the payable tuition below zero.
+export function siblingDiscountFor(student: Student, tuition: number, concession: number): number {
+  const percentage = Number(student.sibling_discount_percentage ?? 0);
+  if (!Number.isFinite(percentage) || percentage <= 0) return 0;
+  const remaining = Math.max(0, tuition - concession);
+  return Math.min(remaining, (Math.max(0, tuition) * Math.min(percentage, 100)) / 100);
+}
+
 // What the student is expected to pay for one month before arrears and fines.
 export function monthlyChargeFor(student: Student, structure: FeeStructure | undefined) {
   const tuition = tuitionFor(student, structure);
   const concession = concessionFor(student, tuition);
+  const siblingDiscount = siblingDiscountFor(student, tuition, concession);
   const extra = Number(structure?.admission_misc ?? 0) + Number(structure?.exam_lab ?? 0) + Number(structure?.transport ?? 0);
-  return { tuition, concession, currentMonthlyFee: Math.max(0, tuition - concession) + extra };
+  return { tuition, concession, siblingDiscount, currentMonthlyFee: Math.max(0, tuition - concession - siblingDiscount) + extra };
 }
 
 // The fee summary shown in the collection tab. The school's own balance is treated as

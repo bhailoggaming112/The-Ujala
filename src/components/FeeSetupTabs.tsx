@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Download, FileSpreadsheet, Printer, Save } from 'lucide-react';
+import { Download, FileSpreadsheet, Percent, Printer, Save } from 'lucide-react';
 import { ChallanView } from '@/components/FeeDocuments';
+import { fetchSiblingDiscountRules, saveSiblingDiscountRule, type SiblingDiscountRule } from '@/lib/feeDiscountRules';
 import {
   CLASS_OPTIONS, HEAD_LABELS, challanDisplayNumber, collectedInMonth, dailyTotals, downloadCsv,
   formatDay, formatMoney, headsTotal, methodTotals, monthKey, monthLabel, monthOptions, monthlyChargeFor,
@@ -22,7 +23,7 @@ const emptyStructure = (className: string): FeeStructure => ({
 type ChallanDraft = FeeHeads & { student: Student };
 
 function draftFor(student: Student, structure: FeeStructure | undefined, arrears: number): ChallanDraft {
-  const { tuition, concession } = monthlyChargeFor(student, structure);
+  const { tuition, concession, siblingDiscount } = monthlyChargeFor(student, structure);
   return {
     student,
     tuition_fee: tuition,
@@ -30,7 +31,9 @@ function draftFor(student: Student, structure: FeeStructure | undefined, arrears
     exam_lab: Number(structure?.exam_lab ?? 0),
     transport: Number(structure?.transport ?? 0),
     arrears: Math.max(0, arrears),
-    concession,
+    // The concession head carries both the student's own concession and the sibling
+    // discount, so the challan total already reflects the family reduction.
+    concession: concession + siblingDiscount,
     late_fine: 0,
   };
 }
@@ -447,6 +450,7 @@ export function StructureTab({ structures, isAdmin, paymentSettings, onToast, on
           </div>
           <p className="fee-note">Only an administrator can change these amounts.</p>
         </section>
+        <SiblingDiscountCard isAdmin={false} onToast={onToast} />
       </div>
     );
   }
@@ -489,7 +493,84 @@ export function StructureTab({ structures, isAdmin, paymentSettings, onToast, on
         </div>
         <p className="fee-note">Late fine is added automatically when a fee stays unpaid past the challan due date.</p>
       </section>
+      <SiblingDiscountCard isAdmin onToast={onToast} />
     </div>
+  );
+}
+
+// The sibling discount percentages New Admission applies automatically. Each row is one
+// child number in a family; the first child pays full tuition, so the rules start at the
+// second child and a "fourth child onwards" rule also covers the fifth and sixth.
+function SiblingDiscountCard({ isAdmin, onToast }: { isAdmin: boolean; onToast: (message: string) => void }) {
+  const [rules, setRules] = useState<SiblingDiscountRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState('');
+
+  useEffect(() => {
+    void fetchSiblingDiscountRules().then((result) => { setRules(result.rules); setLoading(false); });
+  }, []);
+
+  const setPercentage = (id: string, value: string) => {
+    const parsed = Number(value);
+    setRules((current) => current.map((rule) => (rule.id === id
+      ? { ...rule, discount_percentage: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0 }
+      : rule)));
+  };
+
+  const save = async (rule: SiblingDiscountRule) => {
+    setSavingId(rule.id);
+    const error = await saveSiblingDiscountRule({ id: rule.id, discountPercentage: Number(rule.discount_percentage) });
+    setSavingId('');
+    if (error) { onToast(error); return; }
+    onToast(`Sibling discount for child ${rule.sibling_order} saved.`);
+  };
+
+  return (
+    <section className="fee-card">
+      <div className="fee-card-head">
+        <div><span className="eyebrow">Sibling discount</span><h2>Brothers and sisters</h2></div>
+        <span className="fee-hint"><Percent size={14} /> Applied automatically during New Admission</span>
+      </div>
+      {loading ? (
+        <p className="fee-empty">Loading the sibling discount rules…</p>
+      ) : rules.length === 0 ? (
+        <p className="fee-empty">No sibling discount rules are set up yet.</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Child in family</th><th>Applies to</th><th className="text-right">Discount</th><th className="no-print" /></tr>
+            </thead>
+            <tbody>
+              {rules.map((rule) => (
+                <tr key={rule.id}>
+                  <td><strong>Child {rule.sibling_order}</strong></td>
+                  <td>{rule.label ?? '—'}</td>
+                  <td className="text-right">
+                    {isAdmin ? (
+                      <input className="fee-head-input" type="number" min="0" max="100" step="1" value={rule.discount_percentage} onChange={(event) => setPercentage(rule.id, event.target.value)} />
+                    ) : (
+                      <span className="tabular-nums">{Number(rule.discount_percentage)}%</span>
+                    )}
+                  </td>
+                  <td className="text-right no-print">
+                    {isAdmin && (
+                      <button type="button" className="fee-link" onClick={() => void save(rule)} disabled={savingId === rule.id}>
+                        <Save size={14} /> {savingId === rule.id ? 'Saving…' : 'Save'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="fee-note">
+        A family is matched on guardian phone, CNIC, or father / guardian name. The first child pays full tuition and
+        each later child gets the percentage shown for their place in the family. Only an administrator can change these percentages.
+      </p>
+    </section>
   );
 }
 

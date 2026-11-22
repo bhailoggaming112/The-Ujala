@@ -257,7 +257,7 @@ export function StudentSearch({ students, loading = false, loadError = null, onT
       <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <StudentResultsTable students={results} onAction={handleRowAction} />}</div>
 
       {noticeOpen && <NoticeModal language={noticeLanguage} templates={templates} students={results} onClose={() => setNoticeOpen(false)} onTemplateSaved={reloadTemplates} onToast={onToast} onPrint={() => { window.print(); onToast(`${noticeLanguage} notice sent to print`); }} />}
-      {editingStudent && <StudentAdmissionEditor key={editingStudent.id} student={editingStudent} onClose={() => setEditingStudent(null)} onSaved={onRefresh} onToast={onToast} />}
+      {editingStudent && <StudentAdmissionEditor key={editingStudent.id} student={editingStudent} students={students} onClose={() => setEditingStudent(null)} onSaved={onRefresh} onToast={onToast} />}
       {activeModal?.kind === 'feeDetails' && <FeeDetailsModal student={activeModal.student} onClose={() => setActiveModal(null)} onRecord={(mode) => setActiveModal({ kind: 'fee', student: activeModal.student, mode })} />}
       {activeModal?.kind === 'fee' && <FeeModal student={activeModal.student} initialMode={activeModal.mode} onClose={() => setActiveModal(null)} onSaved={async (message) => { onToast(message); await onRefresh(); }} />}
       {activeModal?.kind === 'record' && <StudentRecordModal student={activeModal.student} autoPrint={activeModal.autoPrint} onClose={() => setActiveModal(null)} />}

@@ -136,6 +136,29 @@ export async function setFeeOpeningBalance(input: {
 // CNIC, or an identical father/guardian name — the three signals the school records
 // that reliably identify brothers and sisters. Students in more than one cluster are
 // merged, so a family with several matching signals still appears once.
+export type SiblingSignals = { phone: string; cnic: string; name: string };
+
+export type SiblingSignalSource = {
+  guardian_phone?: string | null;
+  father_contact_number?: string | null;
+  messaging_number?: string | null;
+  guardian_cnic?: string | null;
+  fathers_cnic?: string | null;
+  guardian_name?: string | null;
+  fathers_name?: string | null;
+};
+
+// The three family signals, normalised the same way everywhere they are compared: a
+// phone without its leading zero, a CNIC without punctuation, a lower-cased name.
+export function siblingSignalsFor(source: SiblingSignalSource): SiblingSignals {
+  return {
+    phone: (source.guardian_phone ?? source.father_contact_number ?? source.messaging_number ?? '')
+      .replace(/\D/g, '').replace(/^0+/, ''),
+    cnic: (source.guardian_cnic ?? source.fathers_cnic ?? '').replace(/\D/g, ''),
+    name: (source.guardian_name || source.fathers_name || '').trim().toLowerCase(),
+  };
+}
+
 export type SiblingGroup = {
   key: string;
   reason: string;
@@ -170,13 +193,10 @@ export function findSiblingGroups(students: Student[]): SiblingGroup[] {
   };
 
   for (const student of students) {
-    const phone = (student.guardian_phone ?? student.father_contact_number ?? student.messaging_number ?? '')
-      .replace(/\D/g, '').replace(/^0+/, '');
-    const cnic = (student.guardian_cnic ?? student.fathers_cnic ?? '').replace(/\D/g, '');
-    const name = (student.guardian_name || student.fathers_name || '').trim().toLowerCase();
-    push(byPhone, phone.length >= 10 ? phone : '', student.id);
-    push(byCnic, cnic.length >= 10 ? cnic : '', student.id);
-    push(byName, name.length >= 5 ? name : '', student.id);
+    const signals = siblingSignalsFor(student);
+    push(byPhone, signals.phone.length >= 10 ? signals.phone : '', student.id);
+    push(byCnic, signals.cnic.length >= 10 ? signals.cnic : '', student.id);
+    push(byName, signals.name.length >= 5 ? signals.name : '', student.id);
   }
 
   const link = (map: Map<string, string[]>) => {
