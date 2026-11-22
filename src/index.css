@@ -1878,6 +1878,11 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 .fee-blocked-row small { font-size: 11px; color: #7b8f9b; font-variant-numeric: tabular-nums; }
 .fee-blocked-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .fee-blocked-actions .primary-button { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+
+.fee-check-col { width: 36px; text-align: center; }
+.fee-check-col input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #22718c; }
+.fee-row-selected { background: #eef8fa; }
+.fee-sendmode { margin-right: auto; }
 .fee-void-warning { display: flex; gap: 9px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fff4f1; color: #a8483a; font-size: 12px; }
 .fee-void-warning svg { flex: 0 0 auto; margin-top: 1px; }
 

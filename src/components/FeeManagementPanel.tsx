@@ -18,7 +18,7 @@ import {
   monthLabel, monthOptions, payableFee, recordFeePayment, updateFeeVoucher,
   type FeeChallan, type FeePayment, type FeeStructure, type PaymentMethod, type PaymentSettings,
 } from '@/lib/fees';
-import { pickWhatsAppContact, whatsappNumberWarning } from '@/lib/whatsapp';
+import { pickWhatsAppContact, whatsappLink, whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
 import { openWhatsAppChat } from '@/lib/whatsappQueue';
 import { supabase } from '@/lib/supabase';
 
@@ -71,7 +71,7 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
-  const [sendMode, setSendMode] = useState<'web' | 'desktop'>('web');
+  const [sendMode, setSendMode] = useState<AlertSendMode>('wa.me');
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(EMPTY_PAYMENT_SETTINGS);
 
   const today = todayKey();
@@ -129,17 +129,18 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
       return latest;
     }, null);
 
-  const [blockedReminders, setBlockedReminders] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
+  const [reminderQueue, setReminderQueue] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
 
   // One reminder can be sent from a row; the batch button sends to everyone on screen.
-  // The wa.me URL is opened directly — no blank tab is created first — so a blocked
-  // pop-up leaves nothing behind. When the browser blocks the window the reminder link
-  // is collected so the caller can show a clickable fallback.
+  // Only the first student's WhatsApp opens immediately; the rest are queued as
+  // clickable links so the browser does not block a barrage of pop-ups. Portal
+  // notifications are created for every student regardless of the WhatsApp outcome.
   const sendReminders = async (targets: Student[]) => {
     if (targets.length === 0) return;
     let sent = 0;
     let skipped = 0;
-    const blocked: { studentName: string; phone: string; link: string; message: string }[] = [];
+    const queue: { studentName: string; phone: string; link: string; message: string }[] = [];
+    let firstOpened = false;
     for (const student of targets) {
       const contact = pickWhatsAppContact(student);
       if (!contact.number) { skipped += 1; continue; }
@@ -156,26 +157,33 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
         attendance_date: today,
       }]);
       if (error) { onToast(error); return; }
-      const result = openWhatsAppChat(contact.number, body, sendMode);
-      if (result.ok) {
-        sent += 1;
-        await updateSmsStatus(ids, 'sent', `WhatsApp opened (${sendMode})`);
-        try {
-          await supabase.rpc('create_fee_reminder_notification', {
-            p_student_id: student.id,
-            p_due_amount: due,
-            p_reminder_date: today,
-          });
-        } catch { /* portal notification is convenience, not a gate */ }
+      try {
+        await supabase.rpc('create_fee_reminder_notification', {
+          p_student_id: student.id,
+          p_due_amount: due,
+          p_reminder_date: today,
+        });
+      } catch { /* portal notification is convenience, not a gate */ }
+      if (!firstOpened) {
+        const result = openWhatsAppChat(contact.number, body, sendMode);
+        if (result.ok) {
+          sent += 1;
+          await updateSmsStatus(ids, 'sent', `WhatsApp opened (${sendMode})`);
+          firstOpened = true;
+        } else {
+          await updateSmsStatus(ids, 'failed', 'WhatsApp window was blocked');
+          queue.push({ studentName: student.full_name, phone: contact.number, link: result.link, message: body });
+        }
       } else {
-        await updateSmsStatus(ids, 'failed', 'WhatsApp window was blocked');
-        blocked.push({ studentName: student.full_name, phone: contact.number, link: result.link, message: body });
+        const link = whatsappLink(contact.number, body, sendMode);
+        await updateSmsStatus(ids, 'pending', 'Queued — open from the reminder list');
+        queue.push({ studentName: student.full_name, phone: contact.number, link, message: body });
       }
     }
-    if (blocked.length > 0) setBlockedReminders(blocked);
-    const parts = [`${sent} fee reminder${sent === 1 ? '' : 's'} sent to WhatsApp.`];
+    if (queue.length > 0) setReminderQueue(queue);
+    const parts = [`${sent} fee reminder${sent === 1 ? '' : 's'} opened in WhatsApp.`];
     if (skipped > 0) parts.push(`${skipped} skipped — check the saved contact numbers.`);
-    if (blocked.length > 0) parts.push(`${blocked.length} blocked — use the links below to open them.`);
+    if (queue.length > 0) parts.push(`${queue.length} queued — use the links below to open them.`);
     onToast(parts.join(' '));
   };
 
@@ -237,8 +245,10 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           setChallanMonth={setChallanMonth}
           lastPaymentFor={lastPaymentFor}
           onSend={sendReminders}
-          blockedReminders={blockedReminders}
-          onClearBlocked={() => setBlockedReminders([])}
+          sendMode={sendMode}
+          onSendModeChange={setSendMode}
+          reminderQueue={reminderQueue}
+          onClearQueue={() => setReminderQueue([])}
         />
       )}
 
@@ -721,7 +731,13 @@ function CollectionTab({ students, payments, loading, today, onToast, onSaved }:
   );
 }
 
-function DefaultersTab({ students, classList, sectionsFor, challans, challanMonth, setChallanMonth, lastPaymentFor, onSend, blockedReminders, onClearBlocked }: {
+const SEND_MODE_OPTIONS: { value: AlertSendMode; label: string }[] = [
+  { value: 'wa.me', label: 'WhatsApp Link' },
+  { value: 'web', label: 'WhatsApp Web' },
+  { value: 'app', label: 'Desktop App' },
+];
+
+function DefaultersTab({ students, classList, sectionsFor, challans, challanMonth, setChallanMonth, lastPaymentFor, onSend, sendMode, onSendModeChange, reminderQueue, onClearQueue }: {
   students: Student[];
   classList: string[];
   sectionsFor: (className: string) => string[];
@@ -730,14 +746,17 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
   setChallanMonth: (month: string) => void;
   lastPaymentFor: (studentId: string) => { date: string; amount: number } | null;
   onSend: (targets: Student[]) => Promise<void>;
-  blockedReminders: { studentName: string; phone: string; link: string; message: string }[];
-  onClearBlocked: () => void;
+  sendMode: AlertSendMode;
+  onSendModeChange: (mode: AlertSendMode) => void;
+  reminderQueue: { studentName: string; phone: string; link: string; message: string }[];
+  onClearQueue: () => void;
 }) {
   const [classFilter, setClassFilter] = useState('');
   const [sectionFilter, setSectionFilter] = useState('');
   const [search, setSearch] = useState('');
   const [sendingId, setSendingId] = useState('');
   const [copied, setCopied] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -759,11 +778,29 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
   }, [students, classFilter, sectionFilter, search, challans, lastPaymentFor]);
 
   const totalDue = rows.reduce((total, row) => total + row.due, 0);
+  const allSelected = rows.length > 0 && rows.every((row) => selected.has(row.student.id));
+  const selectedCount = rows.filter((row) => selected.has(row.student.id)).length;
 
-  const runBatch = async () => {
+  const toggleAll = (checked: boolean) => {
+    if (checked) setSelected(new Set(rows.map((row) => row.student.id)));
+    else setSelected(new Set());
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const runSelected = async () => {
+    const targets = rows.filter((row) => selected.has(row.student.id)).map((row) => row.student);
+    if (targets.length === 0) return;
     setSendingId('batch');
-    await onSend(rows.map((row) => row.student));
+    await onSend(targets);
     setSendingId('');
+    setSelected(new Set());
   };
 
   const sendOne = async (student: Student) => {
@@ -802,8 +839,24 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
           </label>
         </div>
         <div className="fee-quick">
-          <button className="primary-button" onClick={() => void runBatch()} disabled={sendingId !== '' || rows.length === 0}>
-            <Send size={16} /> {sendingId === 'batch' ? 'Sending…' : `Send reminders to ${rows.length}`}
+          <div className="segmented-control compact fee-sendmode">
+            {SEND_MODE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={sendMode === option.value ? 'selected' : ''}
+                onClick={() => onSendModeChange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="primary-button"
+            onClick={() => void runSelected()}
+            disabled={sendingId !== '' || selectedCount === 0}
+          >
+            <Send size={16} /> {sendingId === 'batch' ? 'Sending…' : `Send Selected (${selectedCount})`}
           </button>
         </div>
       </section>
@@ -814,10 +867,35 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
         ) : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Student</th><th>Class</th><th className="text-right">Due amount</th><th>Last payment</th><th>Challan status</th><th className="no-print" /></tr></thead>
+              <thead>
+                <tr>
+                  <th className="fee-check-col">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={(event) => toggleAll(event.target.checked)}
+                      aria-label="Select all students"
+                    />
+                  </th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th className="text-right">Due amount</th>
+                  <th>Last payment</th>
+                  <th>Challan status</th>
+                  <th className="no-print" />
+                </tr>
+              </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.student.id}>
+                  <tr key={row.student.id} className={selected.has(row.student.id) ? 'fee-row-selected' : ''}>
+                    <td className="fee-check-col">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(row.student.id)}
+                        onChange={() => toggleOne(row.student.id)}
+                        aria-label={`Select ${row.student.full_name}`}
+                      />
+                    </td>
                     <td>
                       <strong>{row.student.full_name}</strong>
                       <small className="fee-sub">{row.student.admission_number} · Guardian {row.student.guardian_phone}</small>
@@ -846,16 +924,16 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
         )}
       </section>
 
-      {blockedReminders.length > 0 && (
-        <div className="notice-overlay" onClick={onClearBlocked}>
+      {reminderQueue.length > 0 && (
+        <div className="notice-overlay" onClick={onClearQueue}>
           <section className="notice-modal fee-blocked-modal" onClick={(event) => event.stopPropagation()}>
             <div className="notice-preview-top">
-              <span className="eyebrow">WhatsApp was blocked by your browser</span>
-              <button className="close-button" onClick={onClearBlocked} aria-label="Close">×</button>
+              <span className="eyebrow">WhatsApp reminder queue</span>
+              <button className="close-button" onClick={onClearQueue} aria-label="Close">×</button>
             </div>
-            <p className="fee-blocked-intro">Your browser blocked the automatic WhatsApp pop-up. Click each link below to open the reminder chat directly.</p>
+            <p className="fee-blocked-intro">The first reminder opened automatically. Click each link below to open the remaining chats one at a time.</p>
             <ul className="fee-blocked-list">
-              {blockedReminders.map((row) => (
+              {reminderQueue.map((row) => (
                 <li key={row.phone + row.studentName}>
                   <div className="fee-blocked-row">
                     <strong>{row.studentName}</strong>
@@ -882,7 +960,7 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
               ))}
             </ul>
             <div className="notice-preview-actions">
-              <button className="secondary-button" onClick={onClearBlocked}>Done</button>
+              <button className="secondary-button" onClick={onClearQueue}>Done</button>
             </div>
           </section>
         </div>

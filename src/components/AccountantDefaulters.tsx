@@ -2,8 +2,15 @@ import { useMemo, useState } from 'react';
 import { BellRing, Download, Send } from 'lucide-react';
 import { feeReminderMessage, sendFeeReminders } from '@/lib/feeReminders';
 import { downloadCsv, formatDay, formatMoney, toCsv, type FeePayment } from '@/lib/fees';
-import { whatsappNumberWarning } from '@/lib/whatsapp';
+import { whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
+import { fetchAbsenteeSendMode, saveAbsenteeSendMode } from '@/lib/absenteeAlerts';
 import type { Student } from '@/lib/schoolTypes';
+
+const SEND_MODE_OPTIONS: { value: AlertSendMode; label: string }[] = [
+  { value: 'wa.me', label: 'WhatsApp Link' },
+  { value: 'web', label: 'WhatsApp Web' },
+  { value: 'app', label: 'Desktop App' },
+];
 
 // Fee defaulters: every student with a balance still owing, sorted by the amount, with
 // a reminder they can be sent through the school's existing WhatsApp route. The message
@@ -22,8 +29,12 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
   const [minDue, setMinDue] = useState('');
   const [sendingId, setSendingId] = useState('');
   const [preview, setPreview] = useState<Student | null>(null);
-  const [blocked, setBlocked] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
+  const [queue, setQueue] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
   const [copied, setCopied] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sendMode, setSendMode] = useState<AlertSendMode>('wa.me');
+
+  useMemo(() => { void fetchAbsenteeSendMode().then((mode) => setSendMode(mode)); }, []);
 
   const classList = useMemo(() => Array.from(new Set(students.map((student) => student.class_name))).sort(), [students]);
   const sectionList = useMemo(() => Array.from(new Set(
@@ -50,16 +61,45 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
   }, [students, classFilter, sectionFilter, search, minDue, payments]);
 
   const totalDue = rows.reduce((total, row) => total + row.due, 0);
+  const allSelected = rows.length > 0 && rows.every((row) => selected.has(row.student.id));
+  const selectedCount = rows.filter((row) => selected.has(row.student.id)).length;
+
+  const toggleAll = (checked: boolean) => {
+    if (checked) setSelected(new Set(rows.map((row) => row.student.id)));
+    else setSelected(new Set());
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const pickSendMode = (mode: AlertSendMode) => {
+    setSendMode(mode);
+    void saveAbsenteeSendMode(mode);
+  };
 
   const run = async (targets: Student[]) => {
     if (targets.length === 0) return;
     const result = await sendFeeReminders(targets, month, today);
     if (result.error) { onToast(result.error); return; }
-    if (result.blocked.length > 0) setBlocked(result.blocked);
-    const parts = [`${result.sent} fee reminder${result.sent === 1 ? '' : 's'} sent to WhatsApp.`];
+    if (result.queue.length > 0) setQueue(result.queue);
+    const parts = [`${result.sent} fee reminder${result.sent === 1 ? '' : 's'} opened in WhatsApp.`];
     if (result.skipped > 0) parts.push(`${result.skipped} skipped — check the saved contact numbers.`);
-    if (result.blocked.length > 0) parts.push(`${result.blocked.length} blocked — use the links below to open them.`);
+    if (result.queue.length > 0) parts.push(`${result.queue.length} queued — use the links below to open them.`);
     onToast(parts.join(' '));
+  };
+
+  const runSelected = async () => {
+    const targets = rows.filter((row) => selected.has(row.student.id)).map((row) => row.student);
+    if (targets.length === 0) return;
+    setSendingId('batch');
+    await run(targets);
+    setSendingId('');
+    setSelected(new Set());
   };
 
   const exportList = () => {
@@ -78,8 +118,12 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
           <div><span className="eyebrow">Follow-up</span><h2>{rows.length} students · {formatMoney(totalDue)} pending</h2></div>
           <div className="fee-quick">
             <button className="secondary-button" onClick={exportList}><Download size={15} /> Export list</button>
-            <button className="primary-button" onClick={() => void run(rows.map((row) => row.student))} disabled={sendingId !== '' || rows.length === 0}>
-              <Send size={15} /> {sendingId === 'batch' ? 'Sending…' : `Send reminders to ${rows.length}`}
+            <button
+              className="primary-button"
+              onClick={() => void runSelected()}
+              disabled={sendingId !== '' || selectedCount === 0}
+            >
+              <Send size={15} /> {sendingId === 'batch' ? 'Sending…' : `Send Selected (${selectedCount})`}
             </button>
           </div>
         </div>
@@ -103,6 +147,20 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, admission no. or phone" />
           </label>
         </div>
+        <div className="fee-quick">
+          <div className="segmented-control compact fee-sendmode">
+            {SEND_MODE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={sendMode === option.value ? 'selected' : ''}
+                onClick={() => pickSendMode(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="fee-card">
@@ -111,10 +169,35 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
         ) : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Student</th><th>Class</th><th className="text-right">Due amount</th><th>Last payment</th><th>Contact</th><th className="no-print" /></tr></thead>
+              <thead>
+                <tr>
+                  <th className="fee-check-col">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={(event) => toggleAll(event.target.checked)}
+                      aria-label="Select all students"
+                    />
+                  </th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th className="text-right">Due amount</th>
+                  <th>Last payment</th>
+                  <th>Contact</th>
+                  <th className="no-print" />
+                </tr>
+              </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.student.id}>
+                  <tr key={row.student.id} className={selected.has(row.student.id) ? 'fee-row-selected' : ''}>
+                    <td className="fee-check-col">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(row.student.id)}
+                        onChange={() => toggleOne(row.student.id)}
+                        aria-label={`Select ${row.student.full_name}`}
+                      />
+                    </td>
                     <td><strong>{row.student.full_name}</strong><small className="fee-sub">{row.student.admission_number} · Guardian {row.student.guardian_name || '—'}</small></td>
                     <td>{row.student.class_name} · {row.student.section_name}</td>
                     <td className="text-right font-semibold tabular-nums text-rose-600">{formatMoney(row.due)}</td>
@@ -137,16 +220,16 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
         )}
       </section>
 
-      {blocked.length > 0 && (
-        <div className="notice-overlay" onClick={() => setBlocked([])}>
+      {queue.length > 0 && (
+        <div className="notice-overlay" onClick={() => setQueue([])}>
           <section className="notice-modal fee-blocked-modal" onClick={(event) => event.stopPropagation()}>
             <div className="notice-preview-top">
-              <span className="eyebrow">WhatsApp was blocked by your browser</span>
-              <button className="close-button" onClick={() => setBlocked([])} aria-label="Close">×</button>
+              <span className="eyebrow">WhatsApp reminder queue</span>
+              <button className="close-button" onClick={() => setQueue([])} aria-label="Close">×</button>
             </div>
-            <p className="fee-blocked-intro">Your browser blocked the automatic WhatsApp pop-up. Click each link below to open the reminder chat directly.</p>
+            <p className="fee-blocked-intro">The first reminder opened automatically. Click each link below to open the remaining chats one at a time.</p>
             <ul className="fee-blocked-list">
-              {blocked.map((row) => (
+              {queue.map((row) => (
                 <li key={row.phone + row.studentName}>
                   <div className="fee-blocked-row">
                     <strong>{row.studentName}</strong>
@@ -173,7 +256,7 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
               ))}
             </ul>
             <div className="notice-preview-actions">
-              <button className="secondary-button" onClick={() => setBlocked([])}>Done</button>
+              <button className="secondary-button" onClick={() => setQueue([])}>Done</button>
             </div>
           </section>
         </div>

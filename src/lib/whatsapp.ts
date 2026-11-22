@@ -86,22 +86,26 @@ export function whatsappNumberWarning(student: WhatsAppFields): string {
   return 'The saved contact numbers are not valid phone numbers, so no WhatsApp chat can be opened for this student.';
 }
 
-// 'web' keeps every chat inside one browser tab; 'desktop' hands the message to the
-// installed WhatsApp app and skips the "Share on WhatsApp" landing page.
-export type AlertSendMode = 'web' | 'desktop';
+// 'web' opens WhatsApp Web (web.whatsapp.com/send) in a browser tab; 'app' hands the
+// message to the installed WhatsApp app via the whatsapp:// protocol; 'wa.me' uses the
+// universal wa.me link that works on both mobile and desktop without a landing page.
+export type AlertSendMode = 'web' | 'app' | 'wa.me';
 
 export function whatsappLink(
   rawPhone: string | null | undefined,
   message: string,
-  mode: AlertSendMode = 'web',
+  mode: AlertSendMode = 'wa.me',
 ): string {
   const phone = cleanPhoneNumber(rawPhone);
   const text = encodeURIComponent(message);
-  if (mode === 'desktop') {
+  if (mode === 'app') {
     return phone ? `whatsapp://send?phone=${phone}&text=${text}` : `whatsapp://send?text=${text}`;
   }
-  // wa.me links open cleanly on both mobile and desktop WhatsApp without an
-  // intermediate "about:blank" or landing page.
+  if (mode === 'web') {
+    return phone
+      ? `https://web.whatsapp.com/send?phone=${phone}&text=${text}`
+      : `https://web.whatsapp.com/send?text=${text}`;
+  }
   return phone
     ? `https://wa.me/${phone}?text=${text}`
     : `https://wa.me/?text=${text}`;

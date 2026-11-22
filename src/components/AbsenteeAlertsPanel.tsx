@@ -18,8 +18,9 @@ import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, upload
 import { openWhatsAppChat } from '@/lib/whatsappQueue';
 
 const SEND_MODES: { value: AlertSendMode; label: string; hint: string; icon: typeof Globe }[] = [
-  { value: 'web', label: 'WhatsApp Web', hint: 'One browser tab is reused for every alert', icon: Globe },
-  { value: 'desktop', label: 'WhatsApp Desktop', hint: 'Opens the installed app and skips the landing page', icon: Monitor },
+  { value: 'wa.me', label: 'WhatsApp Link', hint: 'Universal wa.me link — works on mobile and desktop', icon: Globe },
+  { value: 'web', label: 'WhatsApp Web', hint: 'Opens web.whatsapp.com in a browser tab', icon: Globe },
+  { value: 'app', label: 'Desktop App', hint: 'Opens the installed WhatsApp app via whatsapp://', icon: Monitor },
 ];
 
 // The wording is picked per student from the status saved in the register, so a Leave
@@ -46,7 +47,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const [wording, setWording] = useState<AlertTemplates>(() => alertWordingFrom([]));
   // WhatsApp Web keeps everything in one reused tab; the Desktop app skips the
   // intermediate "Share on WhatsApp" page.
-  const [sendMode, setSendMode] = useState<AlertSendMode>('web');
+  const [sendMode, setSendMode] = useState<AlertSendMode>('wa.me');
   // Narrows the list to one kind of alert without changing what is sent.
   const [statusFilter, setStatusFilter] = useState<AbsenteeAlertStatus | ''>('');
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
@@ -193,9 +194,11 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
     if (next === sendMode) return;
     setSendMode(next);
     void saveAbsenteeSendMode(next);
-    onToast(next === 'desktop'
+    onToast(next === 'app'
       ? 'Alerts will open in the WhatsApp Desktop app from now on.'
-      : 'Alerts will open in one reused WhatsApp Web tab from now on.');
+      : next === 'web'
+        ? 'Alerts will open in a WhatsApp Web browser tab from now on.'
+        : 'Alerts will open via the universal WhatsApp link from now on.');
   };
 
   const saveWording = async () => {
@@ -333,7 +336,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
       setBlocked(blockedRows);
       onToast(`${blockedRows.length} chat${blockedRows.length === 1 ? '' : 's'} could not open because your browser blocked new tabs. Use the links below to send them.`);
     } else if (sentIds.length > 0) {
-      onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened in ${sendMode === 'desktop' ? 'the WhatsApp Desktop app' : 'WhatsApp Web'} and recorded in the WhatsApp SMS Report.`);
+      onToast(`${sentIds.length} WhatsApp chat${sentIds.length === 1 ? '' : 's'} opened in ${sendMode === 'app' ? 'the WhatsApp Desktop app' : sendMode === 'web' ? 'WhatsApp Web' : 'WhatsApp'} and recorded in the WhatsApp SMS Report.`);
     } else {
       await supabase.from('school_sms_log').delete().in('id', log.ids);
       onToast('Sending stopped. Nothing was sent.');
