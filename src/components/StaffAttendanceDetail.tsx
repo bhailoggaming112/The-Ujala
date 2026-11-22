@@ -34,11 +34,11 @@ const formatDay = (value: string) => {
   return date.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short' });
 };
 
-export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd, days, onSaved, onClose }: {
+export function StaffAttendanceDetail({ member, periodLabel, periodStart, periodEnd, days, onSaved, onClose }: {
   member: UserProfile;
-  monthLabel: string;
-  monthStart: string;
-  monthEnd: string;
+  periodLabel: string;
+  periodStart: string;
+  periodEnd: string;
   days: StaffAttendanceDay[];
   onSaved: () => Promise<void>;
   onClose: () => void;
@@ -47,7 +47,12 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
   const [statusDrafts, setStatusDrafts] = useState<Record<string, StaffAttendanceStatus>>({});
   const [savingDate, setSavingDate] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [newDate, setNewDate] = useState(() => todayKey());
+  // A custom range can start in the past, so the new-day form opens on today when
+  // today falls inside the period and otherwise on its first day.
+  const [newDate, setNewDate] = useState(() => {
+    const today = todayKey();
+    return today < periodStart || today > periodEnd ? periodStart : today;
+  });
   const [newStatus, setNewStatus] = useState<StaffAttendanceStatus>('present');
   const [newNote, setNewNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -96,8 +101,8 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
 
   const addDay = async () => {
     setError(null);
-    if (newDate < monthStart || newDate > monthEnd) {
-      setError(`Choose a date inside ${monthLabel}.`);
+    if (newDate < periodStart || newDate > periodEnd) {
+      setError(`Choose a date between ${formatDay(periodStart)} and ${formatDay(periodEnd)}.`);
       return;
     }
     setSavingDate(newDate);
@@ -128,7 +133,7 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={`${member.full_name} attendance for ${monthLabel}`}
+        aria-label={`${member.full_name} attendance for ${periodLabel}`}
       >
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div className="flex items-center gap-3">
@@ -139,7 +144,7 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Attendance history</span>
               <h2 className="text-lg font-bold leading-tight text-slate-800">{member.full_name}</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                {ROLE_LABELS[member.role] ?? member.role} · {member.username} · {monthLabel}
+                {ROLE_LABELS[member.role] ?? member.role} · {member.username} · {periodLabel}
               </p>
             </div>
           </div>
@@ -164,7 +169,7 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
 
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-2.5">
           <span className="text-[11px] font-semibold text-slate-500">
-            Edit a day’s note, change its status, or add a day that was missed.
+            Edit a day’s note, change its status, or add a day that was missed in this period.
           </span>
           <button type="button" className="secondary-button" onClick={() => setAdding((current) => !current)}>
             <CalendarPlus size={15} /> {adding ? 'Cancel' : 'Add a day'}
@@ -178,8 +183,8 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
                 Date
                 <input
                   type="date"
-                  min={monthStart}
-                  max={monthEnd}
+                  min={periodStart}
+                  max={periodEnd}
                   value={newDate}
                   onChange={(event) => setNewDate(event.target.value)}
                 />
@@ -222,7 +227,7 @@ export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd
           {error && <p className="mb-3 text-xs font-semibold text-rose-600">{error}</p>}
           {days.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">
-              No attendance was recorded for {member.full_name} in {monthLabel}. Use “Add a day” to record one.
+              No attendance was recorded for {member.full_name} in {periodLabel}. Use “Add a day” to record one.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">

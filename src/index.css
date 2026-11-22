@@ -1014,6 +1014,44 @@ input[dir="rtl"]:focus {
 .att-monthly-totals span.warn b { color: #c15a4c; }
 .att-monthly-filters { margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf2f4; }
 .att-threshold-field { flex: 0 1 130px; }
+
+/* --- Report period switch (whole month vs custom dates) ------------------ */
+.att-range-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dfeaec;
+  border-radius: 11px;
+  background: #f4f9fa;
+  flex: 0 0 auto;
+}
+.att-range-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6d8491;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.att-range-toggle button:hover { color: #2f88a3; background: #e9f4f7; }
+.att-range-toggle button.on { background: #3da4c5; color: white; box-shadow: 0 4px 10px #52a9c533; }
+.att-range-error {
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #f3d3cb;
+  border-radius: 9px;
+  background: #fff6f3;
+  color: #c15a4c;
+  font-size: 11px;
+  font-weight: 700;
+}
 .att-monthly-search { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 16px 0 4px; }
 .att-monthly-table { margin-top: 12px; }
 .att-monthly-student { display: flex; align-items: center; gap: 10px; }
@@ -1206,6 +1244,8 @@ input[dir="rtl"]:focus {
   .cal-item-date { flex: 1 1 100%; }
   .att-monthly-search { align-items: stretch; flex-direction: column; }
   .att-monthly-search .search-field { width: 100%; }
+  .att-range-toggle { width: 100%; }
+  .att-range-toggle button { flex: 1; justify-content: center; }
   .cal-add-button { width: 100%; }
 }
 
