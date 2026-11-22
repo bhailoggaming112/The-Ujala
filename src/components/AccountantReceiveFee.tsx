@@ -94,7 +94,15 @@ export function AccountantReceiveFee({ students, payments, loading, today, onToa
     setLooking(true);
     setError('');
 
-    const byAdmission = students.find((row) => (row.admission_number ?? '').toLowerCase() === trimmed.toLowerCase());
+    // Try the roster first: an exact admission number match is the fastest path and avoids
+    // a round trip. Digits-only ("2401" for "SD-2401") is accepted too, so a counter who
+    // skips the prefix still lands on the student.
+    const lowerTrimmed = trimmed.toLowerCase();
+    const digitsOnly = trimmed.replace(/\D/g, '');
+    const byAdmission = students.find(
+      (row) => (row.admission_number ?? '').toLowerCase() === lowerTrimmed
+        || (digitsOnly && (row.admission_number ?? '').replace(/\D/g, '') === digitsOnly),
+    );
     if (byAdmission) {
       setLooking(false);
       loadStudent(byAdmission, Math.max(0, Number(byAdmission.fee_balance ?? 0)), '');

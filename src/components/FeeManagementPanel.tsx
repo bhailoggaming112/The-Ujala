@@ -398,13 +398,24 @@ function CollectionTab({ students, payments, loading, today, onToast, onSaved }:
     setLooking(true);
     setError('');
 
-    const byAdmission = students.find((row) => (row.admission_number ?? '').toLowerCase() === trimmed.toLowerCase());
+    // Try the roster first: an exact admission number match is the fastest path and avoids
+    // a round trip. Digits-only ("2401" for "SD-2401") is accepted too, so a counter who
+    // skips the prefix still lands on the student.
+    const lowerTrimmed = trimmed.toLowerCase();
+    const digitsOnly = trimmed.replace(/\D/g, '');
+    const byAdmission = students.find(
+      (row) => (row.admission_number ?? '').toLowerCase() === lowerTrimmed
+        || (digitsOnly && (row.admission_number ?? '').replace(/\D/g, '') === digitsOnly),
+    );
     if (byAdmission) {
       setLooking(false);
       loadStudent(byAdmission, Math.max(0, Number(byAdmission.fee_balance ?? 0)), '');
       return;
     }
 
+    // Anything else — a challan number, a barcode, or an admission number for a student
+    // not on the active roster — is resolved by the database, which understands every
+    // form a code can take.
     const result = await lookupFeeChallan(trimmed);
     setLooking(false);
     if (result.error || !result.challan) {
