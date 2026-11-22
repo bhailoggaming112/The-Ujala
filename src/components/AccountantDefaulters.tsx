@@ -31,9 +31,12 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const floor = Number(minDue || 0);
-    const lastPaymentFor = (studentId: string) => payments
+    const lastPaymentFor = (studentId: string): { date: string; amount: number } | null => payments
       .filter((payment) => payment.student_id === studentId && !payment.voided)
-      .reduce<string | null>((latest, payment) => (!latest || payment.payment_date > latest ? payment.payment_date : latest), null);
+      .reduce<{ date: string; amount: number } | null>((latest, payment) => {
+        if (!latest || payment.payment_date > latest.date) return { date: payment.payment_date, amount: Number(payment.amount) };
+        return latest;
+      }, null);
     return students
       .filter((student) => Number(student.fee_balance ?? 0) > 0)
       .filter((student) => !classFilter || student.class_name === classFilter)
@@ -56,8 +59,8 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
 
   const exportList = () => {
     const rowsCsv: (string | number | null)[][] = [
-      ['Student', 'Admission no.', 'Class', 'Section', 'Guardian', 'Contact', 'Due amount', 'Last payment'],
-      ...rows.map((row) => [row.student.full_name, row.student.admission_number, row.student.class_name, row.student.section_name, row.student.guardian_name, row.student.guardian_phone, row.due, row.lastPayment]),
+      ['Student', 'Admission no.', 'Class', 'Section', 'Guardian', 'Contact', 'Due amount', 'Last payment amount', 'Last payment date'],
+      ...rows.map((row) => [row.student.full_name, row.student.admission_number, row.student.class_name, row.student.section_name, row.student.guardian_name, row.student.guardian_phone, row.due, row.lastPayment?.amount ?? null, row.lastPayment?.date ?? null]),
     ];
     downloadCsv('fee-defaulters.csv', toCsv(rowsCsv));
     onToast(`${rows.length} defaulters exported`);
@@ -110,7 +113,7 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
                     <td><strong>{row.student.full_name}</strong><small className="fee-sub">{row.student.admission_number} · Guardian {row.student.guardian_name || '—'}</small></td>
                     <td>{row.student.class_name} · {row.student.section_name}</td>
                     <td className="text-right font-semibold tabular-nums text-rose-600">{formatMoney(row.due)}</td>
-                    <td>{row.lastPayment ? formatDay(row.lastPayment) : 'No payment yet'}</td>
+                    <td>{row.lastPayment ? `${formatMoney(row.lastPayment.amount)} · ${formatDay(row.lastPayment.date)}` : 'No payment yet'}</td>
                     <td>{row.student.guardian_phone || '—'}{whatsappNumberWarning(row.student) && <small className="fee-warn">{whatsappNumberWarning(row.student)}</small>}</td>
                     <td className="text-right no-print">
                       <div className="fee-row-actions">

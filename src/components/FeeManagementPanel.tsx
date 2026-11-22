@@ -121,19 +121,23 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
   const collectedToday = collectedOn(payments, today);
   const monthlyCollection = collectedInMonth(payments, currentMonth);
 
-  const lastPaymentFor = (studentId: string) => payments
-    .filter((payment) => payment.student_id === studentId)
-    .reduce<string | null>((latest, payment) => (!latest || payment.payment_date > latest ? payment.payment_date : latest), null);
+  const lastPaymentFor = (studentId: string): { date: string; amount: number } | null => payments
+    .filter((payment) => payment.student_id === studentId && !payment.voided)
+    .reduce<{ date: string; amount: number } | null>((latest, payment) => {
+      if (!latest || payment.payment_date > latest.date) return { date: payment.payment_date, amount: Number(payment.amount) };
+      return latest;
+    }, null);
 
   // One reminder can be sent from a row; the batch button sends to everyone on screen.
   const sendReminders = async (targets: Student[]) => {
     if (targets.length === 0) return;
-    const senderWindow = primeWhatsAppWindow(sendMode);
+    let senderWindow: Window | null = null;
     let sent = 0;
     let skipped = 0;
     for (const student of targets) {
       const contact = pickWhatsAppContact(student);
       if (!contact.number) { skipped += 1; continue; }
+      if (!senderWindow) senderWindow = primeWhatsAppWindow(sendMode);
       const body = reminderMessage(student, Math.max(0, Number(student.fee_balance ?? 0)), currentMonth);
       const { ids, error } = await queueSmsMessages([{
         student_id: student.id,
@@ -702,7 +706,7 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
   challans: FeeChallan[];
   challanMonth: string;
   setChallanMonth: (month: string) => void;
-  lastPaymentFor: (studentId: string) => string | null;
+  lastPaymentFor: (studentId: string) => { date: string; amount: number } | null;
   onSend: (targets: Student[]) => Promise<void>;
 }) {
   const [classFilter, setClassFilter] = useState('');
@@ -795,7 +799,7 @@ function DefaultersTab({ students, classList, sectionsFor, challans, challanMont
                     </td>
                     <td>{row.student.class_name} · {row.student.section_name}</td>
                     <td className="text-right font-semibold tabular-nums">{formatMoney(row.due)}</td>
-                    <td>{row.lastPayment ? formatDay(row.lastPayment) : 'No payment yet'}</td>
+                    <td>{row.lastPayment ? `${formatMoney(row.lastPayment.amount)} · ${formatDay(row.lastPayment.date)}` : 'No payment yet'}</td>
                     <td>
                       <span className={`fee-status ${row.challan ? row.challan.status : 'none'}`}>
                         {row.challan ? row.challan.status : 'No challan'}

@@ -41,7 +41,7 @@ export function isValidWhatsAppNumber(raw: string | null | undefined): boolean {
   return true;
 }
 
-export type WhatsAppSource = 'WhatsApp Number' | 'Messaging Number' | 'Father Contact No.';
+export type WhatsAppSource = 'WhatsApp Number' | 'Messaging Number' | 'Father Contact No.' | 'Guardian Phone' | 'Mother Number';
 
 export type WhatsAppContact = { number: string; source: WhatsAppSource | null; raw: string | null };
 
@@ -49,17 +49,21 @@ export type WhatsAppFields = {
   whatsapp_number?: string | null;
   messaging_number?: string | null;
   father_contact_number?: string | null;
+  guardian_phone?: string | null;
+  mother_number?: string | null;
 };
 
 // The WhatsApp Number saved on the student is always the first choice. Messaging
-// Number and Father Contact No. are only used when no WhatsApp Number is saved, and
-// a value that is not a real phone number (a CNIC, for example) is skipped rather
-// than dialled.
+// Number, Father Contact, Guardian Phone and Mother Number are fallbacks, checked in
+// that order. A value that is not a real phone number (a CNIC, for example) is skipped
+// rather than dialled.
 export function pickWhatsAppContact(student: WhatsAppFields): WhatsAppContact {
   const candidates: { label: WhatsAppSource; value: string | null }[] = [
     { label: 'WhatsApp Number', value: student.whatsapp_number ?? null },
     { label: 'Messaging Number', value: student.messaging_number ?? null },
     { label: 'Father Contact No.', value: student.father_contact_number ?? null },
+    { label: 'Guardian Phone', value: student.guardian_phone ?? null },
+    { label: 'Mother Number', value: student.mother_number ?? null },
   ];
   for (const candidate of candidates) {
     const raw = (candidate.value ?? '').trim();
@@ -72,10 +76,10 @@ export function pickWhatsAppContact(student: WhatsAppFields): WhatsAppContact {
 // Explains why a student cannot be messaged, so the office knows what to fix instead
 // of the app opening a WhatsApp chat with a broken number.
 export function whatsappNumberWarning(student: WhatsAppFields): string {
-  const saved = [student.whatsapp_number, student.messaging_number, student.father_contact_number]
+  const saved = [student.whatsapp_number, student.messaging_number, student.father_contact_number, student.guardian_phone, student.mother_number]
     .map((value) => (value ?? '').trim())
     .filter(Boolean);
-  if (saved.length === 0) return 'No WhatsApp, messaging or father contact number is saved for this student.';
+  if (saved.length === 0) return 'No WhatsApp, messaging or contact number is saved for this student.';
   if (saved.some((value) => cleanPhoneNumber(value).length === CNIC_DIGITS)) {
     return 'The saved number looks like a CNIC rather than a phone number. Save a real WhatsApp number on the student record.';
   }

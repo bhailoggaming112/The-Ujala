@@ -27,13 +27,15 @@ export async function sendFeeReminders(targets: Student[], month: string, today:
   let sendMode: 'web' | 'desktop' = 'web';
   try { sendMode = await fetchAbsenteeSendMode(); } catch { sendMode = 'web'; }
 
-  const senderWindow = primeWhatsAppWindow(sendMode);
+  const senderWindow: Window | null = null;
   let sent = 0;
   let skipped = 0;
+  let primed = false;
 
   for (const student of targets) {
     const contact = pickWhatsAppContact(student);
     if (!contact.number) { skipped += 1; continue; }
+    if (!primed) { primeWhatsAppWindow(sendMode); primed = true; }
     const body = feeReminderMessage(student, Math.max(0, Number(student.fee_balance ?? 0)), month);
     const { ids, error } = await queueSmsMessages([{
       student_id: student.id,
@@ -45,12 +47,12 @@ export async function sendFeeReminders(targets: Student[], month: string, today:
       message_body: body,
       attendance_date: today,
     }]);
-    if (error) { closeWhatsAppWindow(senderWindow); return { sent, skipped, error }; }
+    if (error) { if (senderWindow) closeWhatsAppWindow(senderWindow); return { sent, skipped, error }; }
     const result = openWhatsAppChat(contact.number, body, sendMode);
     await updateSmsStatus(ids, result.ok ? 'sent' : 'failed', result.ok ? `WhatsApp opened (${sendMode})` : 'WhatsApp window was blocked');
     if (result.ok) sent += 1; else skipped += 1;
   }
 
-  if (sent === 0) closeWhatsAppWindow(senderWindow);
+  if (sent === 0 && senderWindow) closeWhatsAppWindow(senderWindow);
   return { sent, skipped, error: null };
 }
