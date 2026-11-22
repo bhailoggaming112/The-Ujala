@@ -10,6 +10,7 @@ import {
   saveStaffAttendance,
   type StaffAttendanceStatus,
 } from '@/lib/staffAttendance';
+import { StaffMonthlyReport } from '@/components/StaffMonthlyReport';
 
 type Draft = { status: StaffAttendanceStatus; note: string };
 
@@ -27,6 +28,7 @@ export function StaffAttendanceTab({ onToast, staff }: {
   staff: UserProfile[];
 }) {
   const [date, setDate] = useState(() => todayKey());
+  const [subView, setSubView] = useState<'register' | 'monthly'>('register');
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -88,6 +90,31 @@ export function StaffAttendanceTab({ onToast, staff }: {
 
   return (
     <div className="attendance-manager">
+      <div className="att-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subView === 'register'}
+          className={`att-tab ${subView === 'register' ? 'active' : ''}`}
+          onClick={() => setSubView('register')}
+        >
+          Daily register
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subView === 'monthly'}
+          className={`att-tab ${subView === 'monthly' ? 'active' : ''}`}
+          onClick={() => setSubView('monthly')}
+        >
+          Monthly report
+        </button>
+      </div>
+
+      {subView === 'monthly' ? (
+        <StaffMonthlyReport staff={staff} />
+      ) : (
+        <>
       <div className="panel attendance-filters-panel">
         <div className="att-filters">
           <label className="control-field">Attendance date
@@ -179,6 +206,8 @@ export function StaffAttendanceTab({ onToast, staff }: {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
