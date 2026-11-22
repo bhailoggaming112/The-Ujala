@@ -1670,7 +1670,14 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 .fee-status.unpaid { background: #fff4f1; color: #a8483a; }
 .fee-status.partial { background: #fff6db; color: #8f6416; }
 .fee-status.paid { background: #e9f6ef; color: #2f7d57; }
-.fee-status.none { background: #f2f6f8; color: #8598a4; }
+.fee-status.none, .fee-status.neutral { background: #f2f6f8; color: #8598a4; }
+
+/* Sub-tab helpers for fee adjustments, siblings and the fee ledger. */
+.fee-segmented-wrap { display: flex; flex-direction: column; gap: 8px; }
+.fee-segmented-wrap .fee-segmented { margin-bottom: 0; }
+.fee-tally-inline { display: inline-flex; align-items: center; gap: 6px; color: #7d919c; font-size: 11.5px; font-weight: 600; }
+.fee-tally-inline strong { color: #2e4759; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fee-history-heading { margin: 20px 0 10px; color: #526b7b; font: 800 11px 'Plus Jakarta Sans', 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 1.1px; }
 
 .fee-receipt-total { margin-top: 16px; border-radius: 14px; background: linear-gradient(120deg, #eaf7fa, #f3fbfc); padding: 18px 20px; }
 .fee-receipt-total span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .9px; color: #6d8491; font-weight: 700; }

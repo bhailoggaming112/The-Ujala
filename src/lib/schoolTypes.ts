@@ -85,6 +85,8 @@ export type Student = {
   data_source?: 'current_session' | 'archive' | null;
   clearance_status?: 'cleared' | 'not_clear' | null;
   fee_balance: number;
+  fee_opening_balance?: number | null;
+  fee_opening_balance_date?: string | null;
   status: 'active' | 'pending' | 'withdrawn' | 'promoted';
 };
 

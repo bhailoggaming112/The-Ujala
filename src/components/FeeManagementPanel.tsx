@@ -21,16 +21,23 @@ import {
 import { pickWhatsAppContact, whatsappLink, whatsappWebLink, whatsappNumberWarning, type AlertSendMode } from '@/lib/whatsapp';
 import { openWhatsAppChat } from '@/lib/whatsappQueue';
 import { supabase } from '@/lib/supabase';
+import { AdjustmentTab, LedgerTab, OpeningBalanceTab, SiblingsTab } from '@/components/FeeManagementTabs';
 
-export type FeeTab = 'overview' | 'collection' | 'challan' | 'defaulters' | 'structure' | 'reports';
+export type FeeTab =
+  | 'overview' | 'generate' | 'collect' | 'outstanding' | 'adjustment'
+  | 'siblings' | 'ledger' | 'structure' | 'opening' | 'reports';
 
 const TABS: { id: FeeTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'collection', label: 'Fee Collection' },
-  { id: 'challan', label: 'Generate Challan' },
-  { id: 'defaulters', label: 'Defaulters' },
+  { id: 'generate', label: 'Generate Fee' },
+  { id: 'collect', label: 'Collect Fee' },
+  { id: 'outstanding', label: 'Outstanding Fee' },
+  { id: 'adjustment', label: 'Fee Adjustment' },
+  { id: 'siblings', label: 'Brother & Sister' },
+  { id: 'ledger', label: 'Students Fee Ledger' },
   { id: 'structure', label: 'Fee Structure' },
-  { id: 'reports', label: 'Fee Reports' },
+  { id: 'opening', label: 'Fee Opening Balance' },
+  { id: 'reports', label: 'Reports' },
 ];
 
 function reminderMessage(student: Student, due: number, month: string) {
@@ -222,13 +229,28 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           defaulterCount={defaulterCount}
           currentMonth={currentMonth}
           payments={payments}
-          onCollect={() => setTab('collection')}
-          onChallan={() => setTab('challan')}
-          onDefaulters={() => setTab('defaulters')}
+          onCollect={() => setTab('collect')}
+          onChallan={() => setTab('generate')}
+          onDefaulters={() => setTab('outstanding')}
         />
       )}
 
-      {tab === 'collection' && (
+      {tab === 'generate' && (
+        <ChallanTab
+          students={activeStudents}
+          structures={structures}
+          classList={classList}
+          sectionsFor={sectionsFor}
+          month={challanMonth}
+          setMonth={setChallanMonth}
+          savedChallans={challans}
+          paymentSettings={paymentSettings}
+          onToast={onToast}
+          onSaved={reload}
+        />
+      )}
+
+      {tab === 'collect' && (
         <CollectionTab
           students={activeStudents}
           payments={payments}
@@ -238,7 +260,8 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
           onSaved={refreshEverything}
         />
       )}
-      {tab === 'defaulters' && (
+
+      {tab === 'outstanding' && (
         <DefaultersTab
           students={activeStudents}
           classList={classList}
@@ -255,23 +278,36 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
         />
       )}
 
-      {tab === 'challan' && (
-        <ChallanTab
+      {tab === 'adjustment' && (
+        <AdjustmentTab students={activeStudents} onToast={onToast} onSaved={refreshEverything} />
+      )}
+
+      {tab === 'siblings' && (
+        <SiblingsTab
+          students={activeStudents}
+          onSend={sendReminders}
+          sendMode={sendMode}
+          onSendModeChange={setSendMode}
+        />
+      )}
+
+      {tab === 'ledger' && (
+        <LedgerTab
           students={activeStudents}
           structures={structures}
-          classList={classList}
-          sectionsFor={sectionsFor}
-          month={challanMonth}
-          setMonth={setChallanMonth}
-          savedChallans={challans}
-          paymentSettings={paymentSettings}
+          payments={payments}
+          loading={loading}
           onToast={onToast}
-          onSaved={reload}
+          onCollect={() => setTab('collect')}
         />
       )}
 
       {tab === 'structure' && (
         <StructureTab structures={structures} isAdmin={isAdmin} paymentSettings={paymentSettings} onToast={onToast} onSaved={reload} />
+      )}
+
+      {tab === 'opening' && (
+        <OpeningBalanceTab students={activeStudents} onToast={onToast} onSaved={refreshEverything} />
       )}
 
       {tab === 'reports' && (

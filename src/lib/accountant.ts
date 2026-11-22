@@ -35,7 +35,7 @@ export async function fetchAccountantOverview(paymentLimit = 500): Promise<Accou
     const [studentResult, paymentResult] = await Promise.all([
       supabase
         .from('school_students')
-        .select('id, admission_number, full_name, fathers_name, guardian_name, guardian_phone, class_name, section_name, roll_number, status, fee_balance, photo_url')
+        .select('id, admission_number, full_name, fathers_name, guardian_name, guardian_phone, class_name, section_name, roll_number, status, fee_balance, fee_opening_balance, fee_opening_balance_date, photo_url')
         .order('full_name'),
       fetchFeePayments(paymentLimit),
     ]);
