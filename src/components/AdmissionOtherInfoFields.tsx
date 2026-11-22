@@ -7,6 +7,8 @@ import {
 } from '@/lib/admissionFees';
 import { fetchFeeStructures } from '@/lib/fees';
 import type { SiblingContext } from '@/lib/feeDiscountRules';
+import type { FamilyLedger } from '@/lib/familyLedger';
+import { FamilyLedgerPanel } from '@/components/FamilyLedgerPanel';
 import { DropdownWithAdd } from '@/components/DropdownWithAdd';
 
 type TextField = 'current_address' | 'permanent_address' | 'father_contact_number' | 'messaging_number' | 'whatsapp_number' | 'guardian_relationship' | 'guardian_cnic';
@@ -15,7 +17,7 @@ const textareaClass = 'mt-2 w-full rounded-lg border border-slate-200 bg-white p
 
 const formatRupees = (value: number) => `Rs ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions, onOptionsChanged, onToast, siblingContext = null }: {
+export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions, onOptionsChanged, onToast, siblingContext = null, familyLedger = null }: {
   form: AdmissionFormState;
   update: (key: keyof AdmissionFormState, value: string) => void;
   patch: (changes: Partial<AdmissionFormState>) => void;
@@ -23,6 +25,7 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
   onOptionsChanged: () => void;
   onToast: (message: string) => void;
   siblingContext?: SiblingContext | null;
+  familyLedger?: FamilyLedger | null;
 }) {
   const text = (key: TextField, label: string) => (
     <label key={key}>{label}<input value={form[key]} onChange={(event) => update(key, event.target.value)} /></label>
@@ -228,6 +231,15 @@ export function AdmissionOtherInfoFields({ form, update, patch, dropdownOptions,
           </strong>
         </div>
       </div>
+
+      {familyLedger && (
+        <FamilyLedgerPanel
+          ledger={familyLedger}
+          familyLabel={siblingContext?.matchedReason
+            ? `Matched on ${siblingContext.matchedReason}. Brothers and sisters are listed oldest admission first.`
+            : 'Brothers and sisters are listed oldest admission first.'}
+        />
+      )}
       {overConcession && (
         <p className="col-span-full text-xs font-semibold text-rose-600">
           The concession is more than the tuition fee, so the net tuition fee is shown as Rs 0.

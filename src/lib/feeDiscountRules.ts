@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { siblingSignalsFor, type SiblingGroup, type SiblingSignalSource } from '@/lib/feeAdjustments';
+import type { Student } from '@/lib/schoolTypes';
 
 // One row per child number in a family. The first child gets no sibling discount, so
 // the rules start at the second child.
@@ -17,6 +18,10 @@ export type SiblingContext = {
   discountPercentage: number;
   ruleLabel: string | null;
   matchedReason: string | null;
+  // The whole family in sibling order, with the student on the form included, so the
+  // admission screen can show the family's combined fee position.
+  students: Student[];
+  candidateIndex: number;
 };
 
 const RULE_COLUMNS = 'id, sibling_order, discount_percentage, label, updated_at';
@@ -84,22 +89,19 @@ export function siblingContextFor({ candidate, groups, rules }: SiblingContextIn
       || (signals.name.length >= 5 && other.name === signals.name);
   }));
 
-  if (!group) return { groupSize: 1, siblingOrder: 1, discountPercentage: 0, ruleLabel: null, matchedReason: null };
+  const self = candidate as unknown as Student;
+  if (!group) {
+    return { groupSize: 1, siblingOrder: 1, discountPercentage: 0, ruleLabel: null, matchedReason: null, students: [self], candidateIndex: 0 };
+  }
 
-  // The stored record of the student being edited still carries its old details, so it
-  // is replaced by the details currently on the form before the family is ordered.
-  const family: FamilyMember[] = [
-    ...group.students.map((member) => ({ id: member.id, admission_number: member.admission_number, full_name: member.full_name })),
-    { id: candidate.id, admission_number: candidate.admission_number, full_name: candidate.full_name },
-  ];
-
-  const ordered = [...family].sort((a, b) =>
+  // The stored record of the student being edited is dropped so it is not counted twice;
+  // the details currently on the form take its place in the family.
+  const siblings = group.students.filter((member) => !(candidate.id ? member.id === candidate.id : false));
+  const ordered = [...siblings, self].sort((a, b) =>
     admissionSequence(a.admission_number) - admissionSequence(b.admission_number)
     || (a.full_name ?? '').localeCompare(b.full_name ?? ''));
 
-  const index = ordered.findIndex((member) =>
-    (candidate.id ? member.id === candidate.id : false)
-    || (candidate.admission_number ? member.admission_number === candidate.admission_number : false));
+  const index = ordered.findIndex((member) => member === self);
   const siblingOrder = index < 0 ? ordered.length : index + 1;
 
   const rule = discountForSiblingOrder(rules, siblingOrder);
@@ -109,5 +111,7 @@ export function siblingContextFor({ candidate, groups, rules }: SiblingContextIn
     discountPercentage: rule ? Number(rule.discount_percentage) : 0,
     ruleLabel: rule?.label ?? null,
     matchedReason: group.reason,
+    students: ordered,
+    candidateIndex: index < 0 ? ordered.length - 1 : index,
   };
 }

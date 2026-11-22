@@ -38,6 +38,8 @@ import type { InformationDraft } from '@/components/InformationRecords';
 import { createAdmissionForm, fetchNextAdmissionNumber } from '@/lib/admissionFormState';
 import { findSiblingGroups } from '@/lib/feeAdjustments';
 import { fetchSiblingDiscountRules, siblingContextFor, type SiblingDiscountRule } from '@/lib/feeDiscountRules';
+import { buildFamilyLedger } from '@/lib/familyLedger';
+import { fetchFeeStructures, type FeeStructure } from '@/lib/fees';
 import { AuthProvider, useAuth, type UserRole } from '@/lib/auth';
 import { SchoolDataProvider, useSchoolData, type AddStudentResult, type Attendance } from '@/lib/schoolData';
 import { AuthPage } from '@/components/AuthPage';
@@ -286,7 +288,11 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
   const [form, setForm] = useState<AdmissionFormState>(() => createAdmissionForm(students));
   const [infoRecords, setInfoRecords] = useState<InformationRecord[]>([]);
   const [siblingRules, setSiblingRules] = useState<SiblingDiscountRule[]>([]);
-  useEffect(() => { void fetchSiblingDiscountRules().then((result) => setSiblingRules(result.rules)); }, []);
+  const [structures, setStructures] = useState<FeeStructure[]>([]);
+  useEffect(() => {
+    void fetchSiblingDiscountRules().then((result) => setSiblingRules(result.rules));
+    void fetchFeeStructures().then((result) => setStructures(result.structures));
+  }, []);
 
   // The family groups for a brand new admission come from the roster as it stands, with
   // the form's guardian phone, CNIC and father name filled in for the student being added,
@@ -299,6 +305,11 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
       rules: siblingRules,
     });
   }, [students, form, siblingRules]);
+
+  const familyLedger = useMemo(
+    () => buildFamilyLedger(siblingContext.students, siblingContext.candidateIndex, siblingRules, structures),
+    [siblingContext, siblingRules, structures],
+  );
   const saveInfoRecord = async (draft: InformationDraft) => {
     const now = new Date().toISOString();
     setInfoRecords((current) => draft.id
@@ -346,7 +357,7 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
   const actionLabel = view === 'withdrawals' ? 'Withdraw selected' : view === 'certificates' ? 'Issue certificate' : '';
   const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely WhatsApp note to guardians of absent students.', promotions: 'Review each student’s next class, record the final term result, and promote with a saved condition where needed.', fees: 'Collect fees, generate challans, follow up on dues and review collection reports.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
   return <div className="page module-page"><div className="module-heading"><div><span className="eyebrow">School workspace</span><h1>{title}</h1><p>{pageDescription[view]}</p></div>{view === 'students' && <button className="primary-button" onClick={() => setFormOpen(true)}><Plus size={18} /> New admission</button>}{actionLabel && <button className="primary-button" onClick={() => onToast(`${selectedIds.length || 'No'} students selected — ready for the next step`)}><Send size={17} /> {actionLabel}</button>}</div>
-    {view === 'admission' || (view === 'students' && formOpen) ? <AdmissionForm form={form} setForm={setForm} infoRecords={infoRecords} onSaveInfo={saveInfoRecord} onDeleteInfo={deleteInfoRecord} onClear={clearAdmission} onSubmit={submitAdmission} onAddToSession={addToSession} onCancel={() => setFormOpen(false)} onToast={onToast} siblingContext={siblingContext} onAutoGenerate={() => { void (async () => { const number = await fetchNextAdmissionNumber(); setForm({ ...form, admission_number: number }); onToast(`Admission number ${number} generated`); })(); }} /> : null}
+    {view === 'admission' || (view === 'students' && formOpen) ? <AdmissionForm form={form} setForm={setForm} infoRecords={infoRecords} onSaveInfo={saveInfoRecord} onDeleteInfo={deleteInfoRecord} onClear={clearAdmission} onSubmit={submitAdmission} onAddToSession={addToSession} onCancel={() => setFormOpen(false)} onToast={onToast} siblingContext={siblingContext} familyLedger={familyLedger} onAutoGenerate={() => { void (async () => { const number = await fetchNextAdmissionNumber(); setForm({ ...form, admission_number: number }); onToast(`Admission number ${number} generated`); })(); }} /> : null}
     {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} loading={loading} loadError={loadError} onToast={onToast} onRefresh={onRefresh} onCreatedLogin={onCreatedLogin} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : view === 'sms' ? <AbsenteeAlertsPanel onToast={onToast} onQueueChanged={onAlertsChanged} /> : view === 'promotions' ? <PromoteStudentsPanel students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'fees' ? <FeeManagementPanel students={students} onToast={onToast} onRefresh={onRefresh} /> : ['withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></>}</div>}
   </div>;
 }

@@ -7,6 +7,8 @@ import { AdmissionForm } from '@/components/AdmissionForm';
 import type { InformationDraft } from '@/components/InformationRecords';
 import { findSiblingGroups } from '@/lib/feeAdjustments';
 import { fetchSiblingDiscountRules, siblingContextFor, type SiblingDiscountRule } from '@/lib/feeDiscountRules';
+import { buildFamilyLedger } from '@/lib/familyLedger';
+import { fetchFeeStructures, type FeeStructure } from '@/lib/fees';
 
 export function StudentAdmissionEditor({ student, students, onClose, onSaved, onToast }: { student: Student; students: Student[]; onClose: () => void; onSaved: () => Promise<void>; onToast: (message: string) => void }) {
   const [form, setForm] = useState<AdmissionFormState>(() => admissionFormFromStudent(student));
@@ -14,6 +16,7 @@ export function StudentAdmissionEditor({ student, students, onClose, onSaved, on
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recordsError, setRecordsError] = useState(false);
   const [siblingRules, setSiblingRules] = useState<SiblingDiscountRule[]>([]);
+  const [structures, setStructures] = useState<FeeStructure[]>([]);
 
   const loadRecords = useCallback(async () => {
     setRecordsLoading(true);
@@ -27,6 +30,7 @@ export function StudentAdmissionEditor({ student, students, onClose, onSaved, on
 
   useEffect(() => {
     void fetchSiblingDiscountRules().then((result) => setSiblingRules(result.rules));
+    void fetchFeeStructures().then((result) => setStructures(result.structures));
   }, []);
 
   // The family groups are built from the roster with this student's saved details, then
@@ -44,6 +48,11 @@ export function StudentAdmissionEditor({ student, students, onClose, onSaved, on
     groups: siblingGroups,
     rules: siblingRules,
   }), [student, form, siblingGroups, siblingRules]);
+
+  const familyLedger = useMemo(
+    () => buildFamilyLedger(siblingContext.students, siblingContext.candidateIndex, siblingRules, structures),
+    [siblingContext, siblingRules, structures],
+  );
 
   const saveInfo = async (draft: InformationDraft) => {
     const payload = { information_type: draft.information_type, notes: draft.notes, updated_at: new Date().toISOString() };
@@ -90,6 +99,7 @@ export function StudentAdmissionEditor({ student, students, onClose, onSaved, on
           onCancel={onClose}
           onToast={onToast}
           siblingContext={siblingContext}
+          familyLedger={familyLedger}
         />
       </div>
     </div>

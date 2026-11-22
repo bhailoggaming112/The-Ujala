@@ -6,6 +6,7 @@ import { buildAdmissionCsv } from '@/lib/admissionFormState';
 import { SCHOOL_NAME } from '@/lib/noticeText';
 import { AdmissionOtherInfoFields } from '@/components/AdmissionOtherInfoFields';
 import type { SiblingContext } from '@/lib/feeDiscountRules';
+import type { FamilyLedger } from '@/lib/familyLedger';
 import { AdmissionDocTabs } from '@/components/AdmissionDocTabs';
 import { DropdownWithAdd } from '@/components/DropdownWithAdd';
 import { InformationRecords, type InformationDraft } from '@/components/InformationRecords';
@@ -26,9 +27,10 @@ type AdmissionFormProps = {
   onToast: (message: string) => void;
   onAutoGenerate?: () => void;
   siblingContext?: SiblingContext | null;
+  familyLedger?: FamilyLedger | null;
 };
 
-export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false, infoLoadError = false, onSaveInfo, onDeleteInfo, onSubmit, onAddToSession, onClear, onCancel, onToast, onAutoGenerate, siblingContext = null }: AdmissionFormProps) {
+export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false, infoLoadError = false, onSaveInfo, onDeleteInfo, onSubmit, onAddToSession, onClear, onCancel, onToast, onAutoGenerate, siblingContext = null, familyLedger = null }: AdmissionFormProps) {
   const update = (key: keyof AdmissionFormState, value: string) => setForm({ ...form, [key]: value });
   const patch = (changes: Partial<AdmissionFormState>) => setForm({ ...form, ...changes });
   const [activeTab, setActiveTab] = useState<'info' | 'other' | 'leaving' | 'submitted' | 'issued'>('info');
@@ -193,7 +195,7 @@ export function AdmissionForm({ form, setForm, infoRecords, infoLoading = false,
       <label>Guardian Name<input required value={form.guardian_name} onChange={(event) => update('guardian_name', event.target.value)} /></label>
       <label>Guardian Phone<input required value={form.guardian_phone} onChange={(event) => update('guardian_phone', event.target.value)} /></label>
     </div>}
-    {activeTab === 'other' && <AdmissionOtherInfoFields form={form} update={update} patch={patch} dropdownOptions={dropdownOptions} onOptionsChanged={loadDropdownOptions} onToast={onToast} siblingContext={siblingContext} />}
+    {activeTab === 'other' && <AdmissionOtherInfoFields form={form} update={update} patch={patch} dropdownOptions={dropdownOptions} onOptionsChanged={loadDropdownOptions} onToast={onToast} siblingContext={siblingContext} familyLedger={familyLedger} />}
     {(activeTab === 'leaving' || activeTab === 'submitted' || activeTab === 'issued') && <AdmissionDocTabs tab={activeTab} form={form} update={update} patch={patch} onToast={onToast} />}
     <div className="print-section no-print mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div><span className="eyebrow">Print and export</span><p className="text-sm text-slate-600">Share a copy of this admission form.</p></div>
