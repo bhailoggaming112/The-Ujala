@@ -48,7 +48,7 @@ export type GradingScale = {
   created_at: string;
 };
 
-export type GradingDraft = Omit<GradingScale, 'id' | 'created_at'>;
+export type GradingDraft = Omit<GradingScale, 'id' | 'created_at' | 'sort_order'> & { sort_order: string | number };
 
 // ============================================================================
 // Helper

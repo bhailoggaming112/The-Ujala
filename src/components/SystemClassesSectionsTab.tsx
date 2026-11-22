@@ -34,7 +34,7 @@ export function SystemClassesSectionsTab({ onToast }: { onToast: (message: strin
       if (error) throw error;
       setSections((data ?? []) as SectionRecord[]);
       setError('');
-    } catch (err) {
+    } catch {
       setError('Classes and sections could not be loaded.');
     }
     setLoading(false);
