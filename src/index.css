@@ -1026,6 +1026,24 @@ input[dir="rtl"]:focus {
 .att-monthly-table tbody tr.clickable-row { cursor: pointer; transition: background-color .15s ease; }
 .att-monthly-table tbody tr.clickable-row:hover { background: #f4fbfd; }
 
+/* --- Staff attendance history sheet -------------------------------------- */
+.staff-detail-sheet { animation: lift-in .24s var(--lift-ease) both; }
+.staff-detail-sheet .control-field { flex: 0 1 160px; min-width: 140px; }
+.staff-detail-sheet .control-field input,
+.staff-detail-sheet .control-field select {
+  border: 1px solid #dfe9ed;
+  border-radius: 9px;
+  padding: 9px 10px;
+  color: #405a6b;
+  background: #fcfefe;
+  outline: none;
+  font: 11px/1.6 'DM Sans', sans-serif;
+}
+.staff-detail-sheet .control-field input:focus,
+.staff-detail-sheet .control-field select:focus { border-color: #71bfd4; box-shadow: 0 0 0 3px #dff4f8; }
+.staff-detail-sheet .primary-button:disabled { opacity: .6; cursor: not-allowed; }
+.staff-detail-sheet .secondary-button { padding: 8px 12px; font-size: 11px; }
+
 /* --- School calendar settings ------------------------------------------- */
 .cal-settings { display: flex; flex-direction: column; gap: 18px; }
 .cal-panel { padding: 22px; }

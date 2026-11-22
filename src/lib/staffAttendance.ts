@@ -57,3 +57,31 @@ export async function saveStaffAttendance(
     return { error: 'Could not reach the school server. Check your connection and try again.' };
   }
 }
+
+// Saves a single day for one person — used when an administrator adds a missing day
+// or corrects the note on a day that is already recorded. The same unique key is
+// targeted, so the write lands on that one row and nothing else is touched.
+export async function saveStaffAttendanceDay(params: {
+  staffUserId: string;
+  date: string;
+  status: StaffAttendanceStatus;
+  note: string;
+  markedBy: string | null;
+}): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase
+      .from('school_staff_attendance')
+      .upsert({
+        staff_user_id: params.staffUserId,
+        attendance_date: params.date,
+        status: params.status,
+        note: params.note.trim() ? params.note.trim() : null,
+        marked_by: params.markedBy,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'staff_user_id,attendance_date' });
+    if (error) return { error: 'The attendance note could not be saved. Please try again.' };
+    return { error: null };
+  } catch {
+    return { error: 'Could not reach the school server. Check your connection and try again.' };
+  }
+}

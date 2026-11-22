@@ -49,7 +49,7 @@ function tallyFor(rows: StaffAttendanceRow[]): Tally {
   return tally;
 }
 
-export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
+export function StaffMonthlyReport({ staff, onToast }: { staff: UserProfile[]; onToast: (message: string) => void }) {
   const [roleFilter, setRoleFilter] = useState('all');
   const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
@@ -61,6 +61,7 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailFor, setDetailFor] = useState<UserProfile | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const { start, end } = monthRange(year, monthIndex);
 
@@ -83,7 +84,7 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [start, end]);
+  }, [start, end, reloadToken]);
 
   const byStaff = useMemo(() => {
     const map = new Map<string, StaffAttendanceRow[]>();
@@ -284,7 +285,13 @@ export function StaffMonthlyReport({ staff }: { staff: UserProfile[] }) {
         <StaffAttendanceDetail
           member={detailFor}
           monthLabel={`${MONTH_NAMES[monthIndex]} ${year}`}
+          monthStart={start}
+          monthEnd={end}
           days={daysFor(detailFor.id)}
+          onSaved={async () => {
+            setReloadToken((token) => token + 1);
+            onToast(`Attendance for ${detailFor.full_name} was updated.`);
+          }}
           onClose={() => setDetailFor(null)}
         />
       )}

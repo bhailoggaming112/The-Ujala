@@ -112,7 +112,7 @@ export function StaffAttendanceTab({ onToast, staff }: {
       </div>
 
       {subView === 'monthly' ? (
-        <StaffMonthlyReport staff={staff} />
+        <StaffMonthlyReport staff={staff} onToast={onToast} />
       ) : (
         <>
       <div className="panel attendance-filters-panel">

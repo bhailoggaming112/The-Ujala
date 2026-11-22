@@ -1,7 +1,14 @@
-import { CalendarDays, Info, X } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarDays, CalendarPlus, Check, Info, Loader2, Pencil, Plus, X } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import type { UserProfile } from '@/lib/auth';
-import { attendancePercentage, formatPercentage } from '@/lib/attendance';
-import { STAFF_ATTENDANCE_LABELS, type StaffAttendanceStatus } from '@/lib/staffAttendance';
+import { attendancePercentage, formatPercentage, todayKey } from '@/lib/attendance';
+import {
+  STAFF_ATTENDANCE_LABELS,
+  STAFF_ATTENDANCE_STATUSES,
+  saveStaffAttendanceDay,
+  type StaffAttendanceStatus,
+} from '@/lib/staffAttendance';
 
 export type StaffAttendanceDay = { date: string; status: StaffAttendanceStatus; note: string | null };
 
@@ -27,12 +34,24 @@ const formatDay = (value: string) => {
   return date.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short' });
 };
 
-export function StaffAttendanceDetail({ member, monthLabel, days, onClose }: {
+export function StaffAttendanceDetail({ member, monthLabel, monthStart, monthEnd, days, onSaved, onClose }: {
   member: UserProfile;
   monthLabel: string;
+  monthStart: string;
+  monthEnd: string;
   days: StaffAttendanceDay[];
+  onSaved: () => Promise<void>;
   onClose: () => void;
 }) {
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [statusDrafts, setStatusDrafts] = useState<Record<string, StaffAttendanceStatus>>({});
+  const [savingDate, setSavingDate] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [newDate, setNewDate] = useState(() => todayKey());
+  const [newStatus, setNewStatus] = useState<StaffAttendanceStatus>('present');
+  const [newNote, setNewNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
   const present = days.filter((day) => day.status === 'present').length;
   const late = days.filter((day) => day.status === 'late').length;
   const absent = days.filter((day) => day.status === 'absent').length;
@@ -48,6 +67,56 @@ export function StaffAttendanceDetail({ member, monthLabel, days, onClose }: {
     { label: 'Attendance', value: formatPercentage(percentage), tone: 'text-slate-700' },
   ];
 
+  const statusFor = (day: StaffAttendanceDay) => statusDrafts[day.date] ?? day.status;
+  const noteFor = (day: StaffAttendanceDay) => noteDrafts[day.date] ?? day.note ?? '';
+  const isDirty = (day: StaffAttendanceDay) =>
+    statusFor(day) !== day.status || noteFor(day).trim() !== (day.note ?? '').trim();
+
+  const currentUserId = async () => {
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+  };
+
+  const saveDay = async (day: StaffAttendanceDay) => {
+    setError(null);
+    setSavingDate(day.date);
+    const { error: saveError } = await saveStaffAttendanceDay({
+      staffUserId: member.id,
+      date: day.date,
+      status: statusFor(day),
+      note: noteFor(day),
+      markedBy: await currentUserId(),
+    });
+    if (saveError) { setError(saveError); setSavingDate(null); return; }
+    await onSaved();
+    setNoteDrafts((current) => { const next = { ...current }; delete next[day.date]; return next; });
+    setStatusDrafts((current) => { const next = { ...current }; delete next[day.date]; return next; });
+    setSavingDate(null);
+  };
+
+  const addDay = async () => {
+    setError(null);
+    if (newDate < monthStart || newDate > monthEnd) {
+      setError(`Choose a date inside ${monthLabel}.`);
+      return;
+    }
+    setSavingDate(newDate);
+    const { error: saveError } = await saveStaffAttendanceDay({
+      staffUserId: member.id,
+      date: newDate,
+      status: newStatus,
+      note: newNote,
+      markedBy: await currentUserId(),
+    });
+    if (saveError) { setError(saveError); setSavingDate(null); return; }
+    await onSaved();
+    setNewNote('');
+    setAdding(false);
+    setSavingDate(null);
+  };
+
+  const existingDates = new Set(days.map((day) => day.date));
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4"
@@ -55,7 +124,7 @@ export function StaffAttendanceDetail({ member, monthLabel, days, onClose }: {
       role="presentation"
     >
       <section
-        className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="staff-detail-sheet flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -93,28 +162,107 @@ export function StaffAttendanceDetail({ member, monthLabel, days, onClose }: {
           ))}
         </div>
 
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-2.5">
+          <span className="text-[11px] font-semibold text-slate-500">
+            Edit a day’s note, change its status, or add a day that was missed.
+          </span>
+          <button type="button" className="secondary-button" onClick={() => setAdding((current) => !current)}>
+            <CalendarPlus size={15} /> {adding ? 'Cancel' : 'Add a day'}
+          </button>
+        </div>
+
+        {adding && (
+          <div className="border-b border-slate-200 bg-sky-50/60 px-5 py-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="control-field">
+                Date
+                <input
+                  type="date"
+                  min={monthStart}
+                  max={monthEnd}
+                  value={newDate}
+                  onChange={(event) => setNewDate(event.target.value)}
+                />
+              </label>
+              <label className="control-field">
+                Status
+                <select value={newStatus} onChange={(event) => setNewStatus(event.target.value as StaffAttendanceStatus)}>
+                  {STAFF_ATTENDANCE_STATUSES.map((status) => (
+                    <option key={status} value={status}>{STAFF_ATTENDANCE_LABELS[status]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="control-field min-w-[12rem] flex-1">
+                Note
+                <input
+                  value={newNote}
+                  onChange={(event) => setNewNote(event.target.value)}
+                  placeholder="Optional reason, e.g. sick leave"
+                  maxLength={300}
+                />
+              </label>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void addDay()}
+                disabled={savingDate !== null}
+              >
+                {savingDate !== null ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Add day
+              </button>
+            </div>
+            {existingDates.has(newDate) && (
+              <p className="mt-2 text-[11px] font-semibold text-amber-600">
+                {formatDay(newDate)} is already recorded — adding it will update that day.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          {error && <p className="mb-3 text-xs font-semibold text-rose-600">{error}</p>}
           {days.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">
-              No attendance was recorded for {member.full_name} in {monthLabel}.
+              No attendance was recorded for {member.full_name} in {monthLabel}. Use “Add a day” to record one.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
               {days.map((day) => (
                 <li
                   key={day.date}
-                  className="flex items-start gap-3 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-slate-300 hover:bg-slate-50"
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-slate-300"
                 >
                   <span className="flex w-24 shrink-0 items-center gap-2 text-xs font-bold text-slate-600">
                     <CalendarDays size={14} className="text-slate-400" />
                     {formatDay(day.date)}
                   </span>
-                  <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_TONE[day.status]}`}>
-                    {STAFF_ATTENDANCE_LABELS[day.status]}
-                  </span>
-                  <span className="flex-1 text-xs text-slate-500">
-                    {day.note ? day.note : <span className="text-slate-300">No note</span>}
-                  </span>
+                  <select
+                    className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide outline-none ${STATUS_TONE[statusFor(day)]}`}
+                    value={statusFor(day)}
+                    onChange={(event) => setStatusDrafts((current) => ({ ...current, [day.date]: event.target.value as StaffAttendanceStatus }))}
+                  >
+                    {STAFF_ATTENDANCE_STATUSES.map((status) => (
+                      <option key={status} value={status}>{STAFF_ATTENDANCE_LABELS[status]}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 outline-none transition focus:border-sky-400"
+                    value={noteFor(day)}
+                    onChange={(event) => setNoteDrafts((current) => ({ ...current, [day.date]: event.target.value }))}
+                    placeholder="Add a note"
+                    maxLength={300}
+                  />
+                  {isDirty(day) ? (
+                    <button
+                      type="button"
+                      className="primary-button shrink-0"
+                      onClick={() => void saveDay(day)}
+                      disabled={savingDate !== null}
+                    >
+                      {savingDate === day.date ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save
+                    </button>
+                  ) : (
+                    <Pencil size={14} className="shrink-0 text-slate-300" aria-hidden />
+                  )}
                 </li>
               ))}
             </ul>
@@ -123,7 +271,7 @@ export function StaffAttendanceDetail({ member, monthLabel, days, onClose }: {
 
         <footer className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3">
           <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
-            <Info size={13} /> Late days count as present. Only days actually recorded are listed.
+            <Info size={13} /> Late days count as present. Every change is saved to the school record.
           </p>
           <button type="button" className="secondary-button" onClick={onClose}>Close</button>
         </footer>
