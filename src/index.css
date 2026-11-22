@@ -2389,3 +2389,130 @@ td.urdu-text { line-height: 1.9; font-size: 13px; }
 @media print {
   .neon-clock { display: none !important; }
 }
+
+/* --- Finance module ---------------------------------------------------------
+   Expenses, other income, the general ledger, the trial balance, the income
+   statement and the printable financial report. The module reuses the fee
+   card, filter and tab classes so it sits inside the existing look. */
+.finance-module .att-tabs { margin-bottom: 16px; }
+
+.fin-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+.fin-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fin-range { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.fin-range-dates { display: flex; align-items: flex-end; gap: 10px; }
+.fin-range-dates .control-field.compact { min-width: 140px; }
+
+.fin-hint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 12px 0 0; font-size: 11px; color: #7b8f9b; line-height: 1.7; }
+.fin-hint strong { color: #2e4759; }
+
+/* Category chips above the expense and income tables. */
+.fin-head-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }
+.fin-head-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #fdf3f1; border: 1px solid #f5d9d3; color: #a2543f; font-size: 11px; font-variant-numeric: tabular-nums; }
+.fin-head-chip.income { background: #eef8f2; border-color: #cfe8da; color: #2f7d57; }
+.fin-head-chip b { font-weight: 700; color: #3b5060; }
+
+/* Horizontal share bars used on the breakdown and trend panels. */
+.fin-bar-list { display: flex; flex-direction: column; gap: 10px; }
+.fin-bar { display: grid; grid-template-columns: 160px 1fr 110px; align-items: center; gap: 12px; font-size: 12px; color: #526b7b; }
+.fin-bar > span { font-weight: 700; color: #3b5060; }
+.fin-bar > i { display: block; height: 8px; border-radius: 999px; background: #f1f6f8; overflow: hidden; }
+.fin-bar > i > em { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ffb39c, #ff8c78); transition: width .4s ease; }
+.fin-bar.income > i > em { background: linear-gradient(90deg, #9ad9b9, #57b98b); }
+.fin-bar > strong { text-align: right; font-variant-numeric: tabular-nums; color: #2e4759; }
+
+.fin-mini-bars { display: flex; flex-direction: column; gap: 3px; min-width: 90px; }
+.fin-mini-bars i { display: block; height: 5px; border-radius: 999px; transition: width .4s ease; }
+.fin-mini-bars i.in { background: #57b98b; }
+.fin-mini-bars i.out { background: #ff8c78; }
+
+/* Entry-type pill in the ledger and report tables. */
+.fin-kind { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; white-space: nowrap; }
+.fin-kind.mint { background: #e6f6ec; color: #2f7d57; }
+.fin-kind.sky { background: #e6f3f9; color: #22718c; }
+.fin-kind.coral { background: #fdeeea; color: #b0483a; }
+
+.fin-kind-filter { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-bottom: 6px; }
+.fin-kind-filter > span { font-size: 11px; font-weight: 700; color: #93a5af; text-transform: uppercase; letter-spacing: .8px; }
+
+.fin-check { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.fin-check.ok { background: #e6f6ec; color: #2f7d57; border: 1px solid #c8e6d4; }
+.fin-check.warn { background: #fdf3e3; color: #9a7419; border: 1px solid #f0ddb0; }
+
+/* Income statement layout. */
+.fin-statement-body { display: flex; flex-direction: column; gap: 18px; }
+.fin-statement-block { padding: 16px 18px; border-radius: 14px; border: 1px solid #e6eff3; background: #fbfdfe; }
+.fin-statement-block h3 { margin: 0 0 10px; font: 700 12px 'Plus Jakarta Sans', 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 1px; color: #2f6d86; }
+.fin-statement-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px dashed #e9f0f3; font-size: 12.5px; color: #526b7b; }
+.fin-statement-row.head > span { font-weight: 700; color: #3b5060; }
+.fin-statement-row.sub > span { padding-left: 16px; color: #7b8f9b; }
+.fin-statement-row strong { font-variant-numeric: tabular-nums; color: #2e4759; }
+.fin-statement-row.total { border-bottom: 0; border-top: 1.5px solid #dbe9ee; margin-top: 4px; padding-top: 10px; font-weight: 700; color: #2e4759; }
+.fin-statement-row.total strong { font-size: 14px; }
+.fin-statement-net { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-radius: 14px; }
+.fin-statement-net.surplus { background: linear-gradient(120deg, #eefaf3, #f7fdfa); border: 1px solid #cfe8da; color: #2f7d57; }
+.fin-statement-net.deficit { background: linear-gradient(120deg, #fdf1ee, #fff9f7); border: 1px solid #f3d6cf; color: #b0483a; }
+.fin-statement-net span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .9px; }
+.fin-statement-net strong { font: 800 22px 'Plus Jakarta Sans', 'DM Sans', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+
+/* Chart of heads. */
+.fin-head-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.fin-head-form .control-field { min-width: 160px; }
+.fin-head-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.fin-head-grid h3 { margin: 0 0 8px; font: 700 11px 'Plus Jakarta Sans', 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 1px; color: #93a5af; }
+.fin-head-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; font-size: 12px; color: #3b5060; transition: background .16s ease; }
+.fin-head-row:hover { background: #f7fbfc; }
+.fin-head-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin-head-row.off > span { color: #a6b4be; text-decoration: line-through; }
+
+/* Record form. */
+.fin-modal { width: min(640px, 100%); }
+.fin-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fin-form-row .control-field { min-width: 0; }
+
+/* The printable financial report. */
+.print-fin-report .print-dmc-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.print-fin-report .print-dmc-table th:last-child { text-align: right; }
+.print-fin-report .print-signatures { display: flex; justify-content: space-between; gap: 40px; }
+
+@media (max-width: 1100px) {
+  .fin-bar { grid-template-columns: 120px 1fr 96px; }
+  .fin-head-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .fin-toolbar { flex-direction: column; align-items: stretch; }
+  .fin-toolbar-actions { justify-content: stretch; }
+  .fin-toolbar-actions .secondary-button, .fin-toolbar-actions .primary-button { flex: 1; justify-content: center; }
+  .fin-range { flex-direction: column; align-items: stretch; }
+  .fin-range-dates { flex-direction: column; align-items: stretch; }
+  .fin-form-row { grid-template-columns: 1fr; }
+  .fin-bar { grid-template-columns: 1fr 80px; row-gap: 4px; }
+  .fin-bar > i { grid-column: 1 / -1; }
+  .fin-statement-net { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+
+/* The financial report is printed as its own single sheet: the app is switched
+   off by the shared print rules and only the sheet reaches the printer. */
+@media print {
+  .finance-module .fin-toolbar,
+  .finance-module .fin-hint,
+  .finance-module .fin-kind-filter,
+  .finance-module .fee-kpi-grid,
+  .finance-module .fee-filters,
+  .finance-module .att-tabs { display: none !important; }
+
+  .print-fin-report { font-family: 'Plus Jakarta Sans', 'DM Sans', 'Inter', sans-serif; color: #132a3a; }
+  .print-fin-report .print-header { border-bottom: 2px solid #132a3a; }
+  .print-fin-report .print-header-admitted { border: 1px solid #c3d0d8; border-radius: 8px; padding: 6px 12px; text-align: right; }
+  .print-fin-report .print-header-admitted span { display: block; font-size: 8px; text-transform: uppercase; letter-spacing: 1px; color: #5a6b76; font-weight: 700; }
+  .print-fin-report .print-header-admitted strong { font-size: 11px; color: #132a3a; }
+  .print-fin-report .print-fee-section { margin-top: 10px; break-inside: avoid; }
+  .print-fin-report .print-fee-section h2 { border-bottom: 1.5px solid #dbe4e9; color: #2f6d86; text-transform: uppercase; letter-spacing: 1px; font-size: 10px; }
+  .print-fin-report .print-dmc-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .print-fin-report .print-dmc-table th,
+  .print-fin-report .print-dmc-table td { border: 1px solid #c3d0d8; padding: 4px 7px; font-size: 9.5px; text-align: left; }
+  .print-fin-report .print-dmc-table th { background: #eef6f8; color: #2f6d86; text-transform: uppercase; letter-spacing: .8px; font-size: 8.5px; }
+  .print-fin-report .print-dmc-table tfoot td { font-weight: 800; background: #f7fbfc; }
+  .print-fin-report .print-signatures { display: flex; justify-content: space-between; gap: 40px; margin-top: auto; padding-top: 20mm; }
+  .print-fin-report .print-signature { font-size: 10.5px; }
+}

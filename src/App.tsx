@@ -28,6 +28,7 @@ import {
   Users,
   UserRoundX,
   UsersRound,
+  Wallet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SCHOOL_NAME } from '@/lib/noticeText';
@@ -49,6 +50,7 @@ import { AuthPage } from '@/components/AuthPage';
 import { AdminPanel } from '@/components/AdminPanel';
 import { StaffManagement } from '@/components/StaffManagement';
 import { ExaminationModule } from '@/components/ExaminationModule';
+import { FinanceModule } from '@/components/FinanceModule';
 import { SectionManager } from '@/components/SectionManager';
 import { AttendanceManager } from '@/components/AttendanceManager';
 import { AbsenteeAlertsPanel } from '@/components/AbsenteeAlertsPanel';
@@ -68,7 +70,7 @@ import {
   type PortalCredentials,
 } from '@/lib/portalAccounts';
 
-type View = 'dashboard' | 'students' | 'admission' | 'sections' | 'attendance' | 'sms' | 'promotions' | 'fees' | 'staff' | 'exams' | 'withdrawals' | 'certificates' | 'other' | 'reports' | 'settings' | 'users';
+type View = 'dashboard' | 'students' | 'admission' | 'sections' | 'attendance' | 'sms' | 'promotions' | 'fees' | 'staff' | 'exams' | 'finance' | 'withdrawals' | 'certificates' | 'other' | 'reports' | 'settings' | 'users';
 
 const adminNavItems: { label: string; icon: typeof LayoutDashboard; view: View }[] = [
   { label: 'Dashboard', icon: LayoutDashboard, view: 'dashboard' },
@@ -81,6 +83,7 @@ const adminNavItems: { label: string; icon: typeof LayoutDashboard; view: View }
   { label: 'Fee Management', icon: Coins, view: 'fees' },
   { label: 'Staff Management', icon: UsersRound, view: 'staff' },
   { label: 'Examination', icon: NotebookPen, view: 'exams' },
+  { label: 'Finance', icon: Wallet, view: 'finance' },
   { label: 'Withdraw Students', icon: UserRoundX, view: 'withdrawals' },
   { label: 'Issue Certificate', icon: FileBadge2, view: 'certificates' },
   { label: 'Other Information', icon: BookOpenCheck, view: 'other' },
@@ -96,6 +99,7 @@ const teacherNavItems: { label: string; icon: typeof LayoutDashboard; view: View
   { label: 'Daily Attendance', icon: CalendarCheck2, view: 'attendance' },
   { label: 'Fee Management', icon: Coins, view: 'fees' },
   { label: 'Examination', icon: NotebookPen, view: 'exams' },
+  { label: 'Finance', icon: Wallet, view: 'finance' },
   { label: 'Send Absentee WhatsApp SMS', icon: MessageCircle, view: 'sms' },
   { label: 'Other Information', icon: BookOpenCheck, view: 'other' },
 ];
@@ -246,10 +250,16 @@ function AppInner() {
 
   const showAdminUsers = view === 'users' && profile.role === 'admin';
   const showStaffManagement = view === 'staff' && profile.role === 'admin';
-  const showExamination = view === 'exams' && isStaff;
+  // Administrators and the school's own staff share the operational modules.
+  const isWorkspaceUser = profile.role === 'admin' || isStaff;
+  const showExamination = view === 'exams' && isWorkspaceUser;
+  const showFinance = view === 'finance' && isWorkspaceUser;
   // Staff see their whole menu in one group. Administrators see the operational
-  // items first, then the student-records group below.
-  const splitPoint = isStaff ? roleNavItems.length : 10;
+  // items first, then the student-records group, which starts at Withdraw Students.
+  // Anchoring on that item keeps every operational module added before it — Fee
+  // Management, Staff, Examination, Finance — in the top group.
+  const recordsStart = roleNavItems.findIndex((item) => item.view === 'withdrawals');
+  const splitPoint = isStaff || recordsStart < 0 ? roleNavItems.length : recordsStart;
 
   return (
     <div className="app-shell">
@@ -264,7 +274,7 @@ function AppInner() {
 
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>SchoolDesk</span><span className="crumb-separator">/</span><strong>{title}</strong></div><div className="topbar-actions"><button className="icon-button" aria-label="Search" onClick={() => navigate('students')}><Search size={20} /></button><button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><i /></button><div className="profile-wrap"><button className="profile-button" onClick={() => setShowProfile(!showProfile)}><div className="profile-avatar">{initials}</div><span><small>Signed in</small><strong>{profile.full_name}</strong></span><ChevronDown size={16} /></button>{showProfile && <div className="profile-menu"><strong>{profile.full_name}</strong><button onClick={() => { setShowProfile(false); setShowPassword(true); }}><KeyRound size={14} /> Change password</button><button onClick={() => void signOut()}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
-        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : showStaffManagement ? <StaffManagement onToast={setToast} /> : showExamination ? <ExaminationModule students={students} onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} onAlertsChanged={refreshAlertCount} loading={loading} loadError={dataError} />}
+        {view === 'dashboard' && isStaff ? <TeacherDashboard onNavigate={(v) => navigate(v as View)} /> : view === 'dashboard' ? <Dashboard students={students} counts={counts} loading={loading} onNavigate={navigate} /> : showAdminUsers ? <AdminPanel onToast={setToast} /> : showStaffManagement ? <StaffManagement onToast={setToast} /> : showExamination ? <ExaminationModule students={students} onToast={setToast} /> : showFinance ? <FinanceModule onToast={setToast} /> : <ModuleView view={view} title={title} students={students} filteredStudents={filteredStudents} attendance={attendance} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onAddStudent={addStudent} onCreatedLogin={addCredentials} onRefresh={refresh} onToast={setToast} onAlertsChanged={refreshAlertCount} loading={loading} loadError={dataError} />}
         {toast && <div className="toast"><Check size={17} /> {toast}</div>}
         {credentials && <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />}
         {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} onToast={setToast} />}
@@ -375,7 +385,7 @@ function ModuleView({ view, title, students, filteredStudents, attendance, loadi
   const addToSession = async () => { await saveAdmission({ ...form, data_source: 'current_session' }); };
   const toggleSelected = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const actionLabel = view === 'withdrawals' ? 'Withdraw selected' : view === 'certificates' ? 'Issue certificate' : '';
-  const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely WhatsApp note to guardians of absent students.', promotions: 'Review each student’s next class, record the final term result, and promote with a saved condition where needed.', fees: 'Collect fees, generate challans, follow up on dues and review collection reports.', staff: 'Add and manage the logins for your teachers, office assistants and accountants.', exams: 'Set up examinations and their subjects, enter marks, and review results and report cards.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
+  const pageDescription: Record<View, string> = { dashboard: 'Your school overview for a happy, organized day.', users: 'Create, suspend, or remove user accounts.', settings: 'Manage the default wording used for fee and warning notices.', students: 'Find a student, check their details, or open their record.', admission: 'Add a new learner to your school roster in a few simple steps.', sections: 'Browse class groups and see who is learning together.', attendance: 'Mark today’s attendance and keep your register up to date.', sms: 'Send a kind, timely WhatsApp note to guardians of absent students.', promotions: 'Review each student’s next class, record the final term result, and promote with a saved condition where needed.', fees: 'Collect fees, generate challans, follow up on dues and review collection reports.', staff: 'Add and manage the logins for your teachers, office assistants and accountants.', exams: 'Set up examinations and their subjects, enter marks, and review results and report cards.', finance: 'Record expenses and other income, then review the ledger, trial balance, income statement and reports.', withdrawals: 'Keep your roster tidy when a student leaves the school.', certificates: 'Create school certificates for the moments that matter.', other: 'Helpful school details and everyday administration tools.', reports: 'See clear summaries for attendance and student records.' };
   return <div className="page module-page"><div className="module-heading"><div><span className="eyebrow">School workspace</span><h1>{title}</h1><p>{pageDescription[view]}</p></div>{view === 'students' && <button className="primary-button" onClick={() => setFormOpen(true)}><Plus size={18} /> New admission</button>}{actionLabel && <button className="primary-button" onClick={() => onToast(`${selectedIds.length || 'No'} students selected — ready for the next step`)}><Send size={17} /> {actionLabel}</button>}</div>
     {view === 'admission' || (view === 'students' && formOpen) ? <AdmissionForm form={form} setForm={setForm} infoRecords={infoRecords} onSaveInfo={saveInfoRecord} onDeleteInfo={deleteInfoRecord} onClear={clearAdmission} onSubmit={submitAdmission} onAddToSession={addToSession} onCancel={() => setFormOpen(false)} onToast={onToast} siblingContext={siblingContext} familyLedger={familyLedger} familyStatementInfo={familyStatementInfo} onAutoGenerate={() => { void (async () => { const number = await fetchNextAdmissionNumber(); setForm({ ...form, admission_number: number }); onToast(`Admission number ${number} generated`); })(); }} /> : null}
     {view === 'settings' ? <NoticeTemplateSettings onToast={onToast} /> : view === 'students' ? <StudentSearch students={students} loading={loading} loadError={loadError} onToast={onToast} onRefresh={onRefresh} onCreatedLogin={onCreatedLogin} /> : view === 'attendance' ? <AttendanceManager students={students} onToast={onToast} /> : view === 'sections' ? <SectionManager students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'reports' ? <Reports students={students} attendance={attendance} /> : view === 'sms' ? <AbsenteeAlertsPanel onToast={onToast} onQueueChanged={onAlertsChanged} /> : view === 'promotions' ? <PromoteStudentsPanel students={students} onToast={onToast} onRefresh={onRefresh} /> : view === 'fees' ? <FeeManagementPanel students={students} onToast={onToast} onRefresh={onRefresh} /> : ['withdrawals', 'certificates'].includes(view) ? <SelectableList students={filteredStudents} selectedIds={selectedIds} onToggle={toggleSelected} view={view} /> : view === 'other' ? <OtherInformation onToast={onToast} /> : <div className="panel roster-panel">{loading ? <div className="empty-state large">Loading students…</div> : loadError ? <div className="empty-state large">{loadError}</div> : <><div className="table-toolbar"><div className="search-field"><Search size={18} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, admission number or class" /></div><span className="result-count">{filteredStudents.length} students</span></div><StudentTable students={filteredStudents} /></>}</div>}
