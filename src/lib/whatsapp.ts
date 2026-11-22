@@ -94,7 +94,7 @@ export type AlertSendMode = 'web' | 'app' | 'wa.me';
 export function whatsappLink(
   rawPhone: string | null | undefined,
   message: string,
-  mode: AlertSendMode = 'wa.me',
+  mode: AlertSendMode = 'app',
 ): string {
   const phone = cleanPhoneNumber(rawPhone);
   const text = encodeURIComponent(message);

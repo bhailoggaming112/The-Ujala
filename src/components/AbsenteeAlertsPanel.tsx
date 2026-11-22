@@ -18,9 +18,9 @@ import { ATTACHMENT_ACCEPT, isValidWhatsAppNumber, messageWithAttachment, upload
 import { openWhatsAppChat } from '@/lib/whatsappQueue';
 
 const SEND_MODES: { value: AlertSendMode; label: string; hint: string; icon: typeof Globe }[] = [
-  { value: 'wa.me', label: 'WhatsApp Link', hint: 'Universal wa.me link — works on mobile and desktop', icon: Globe },
-  { value: 'web', label: 'WhatsApp Web', hint: 'Opens web.whatsapp.com in a browser tab', icon: Globe },
   { value: 'app', label: 'Desktop App', hint: 'Opens the installed WhatsApp app via whatsapp://', icon: Monitor },
+  { value: 'web', label: 'WhatsApp Web', hint: 'Opens web.whatsapp.com in a browser tab', icon: Globe },
+  { value: 'wa.me', label: 'WhatsApp Link', hint: 'Universal wa.me link — works on mobile and desktop', icon: Globe },
 ];
 
 // The wording is picked per student from the status saved in the register, so a Leave
@@ -47,7 +47,7 @@ export function AbsenteeAlertsPanel({ onToast, onQueueChanged }: { onToast: (mes
   const [wording, setWording] = useState<AlertTemplates>(() => alertWordingFrom([]));
   // WhatsApp Web keeps everything in one reused tab; the Desktop app skips the
   // intermediate "Share on WhatsApp" page.
-  const [sendMode, setSendMode] = useState<AlertSendMode>('wa.me');
+  const [sendMode, setSendMode] = useState<AlertSendMode>('app');
   // Narrows the list to one kind of alert without changing what is sent.
   const [statusFilter, setStatusFilter] = useState<AbsenteeAlertStatus | ''>('');
   const [templatesLoaded, setTemplatesLoaded] = useState(false);

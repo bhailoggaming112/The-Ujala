@@ -59,8 +59,8 @@ async function createPortalReminder(student: Student, due: number, today: string
 export async function sendFeeReminders(targets: Student[], month: string, today: string): Promise<ReminderResult> {
   if (targets.length === 0) return { sent: 0, skipped: 0, error: null, queue: [] };
 
-  let sendMode: AlertSendMode = 'wa.me';
-  try { sendMode = await fetchAbsenteeSendMode(); } catch { sendMode = 'wa.me'; }
+  let sendMode: AlertSendMode = 'app';
+  try { sendMode = await fetchAbsenteeSendMode(); } catch { sendMode = 'app'; }
 
   let sent = 0;
   let skipped = 0;

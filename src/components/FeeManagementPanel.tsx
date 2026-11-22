@@ -71,7 +71,7 @@ export function FeeManagementPanel({ students, onToast, onRefresh, initialTab = 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
-  const [sendMode, setSendMode] = useState<AlertSendMode>('wa.me');
+  const [sendMode, setSendMode] = useState<AlertSendMode>('app');
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(EMPTY_PAYMENT_SETTINGS);
 
   const today = todayKey();
@@ -732,9 +732,9 @@ function CollectionTab({ students, payments, loading, today, onToast, onSaved }:
 }
 
 const SEND_MODE_OPTIONS: { value: AlertSendMode; label: string }[] = [
-  { value: 'wa.me', label: 'WhatsApp Link' },
-  { value: 'web', label: 'WhatsApp Web' },
   { value: 'app', label: 'Desktop App' },
+  { value: 'web', label: 'WhatsApp Web' },
+  { value: 'wa.me', label: 'WhatsApp Link' },
 ];
 
 function DefaultersTab({ students, classList, sectionsFor, challans, challanMonth, setChallanMonth, lastPaymentFor, onSend, sendMode, onSendModeChange, reminderQueue, onClearQueue }: {

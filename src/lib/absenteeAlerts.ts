@@ -279,10 +279,10 @@ export async function fetchAbsenteeSendMode(): Promise<AlertSendMode> {
       .maybeSingle();
     const stored = (data as { send_mode: string | null } | null)?.send_mode;
     if (stored === 'app' || stored === 'web' || stored === 'wa.me') return stored;
-    // Legacy 'desktop' maps to 'app'; anything else defaults to 'wa.me'.
-    return stored === 'desktop' ? 'app' : 'wa.me';
+    // Legacy 'desktop' maps to 'app'; anything else defaults to 'app'.
+    return stored === 'desktop' ? 'app' : 'app';
   } catch {
-    return 'wa.me';
+    return 'app';
   }
 }
 

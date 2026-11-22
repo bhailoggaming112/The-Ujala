@@ -7,9 +7,9 @@ import { fetchAbsenteeSendMode, saveAbsenteeSendMode } from '@/lib/absenteeAlert
 import type { Student } from '@/lib/schoolTypes';
 
 const SEND_MODE_OPTIONS: { value: AlertSendMode; label: string }[] = [
-  { value: 'wa.me', label: 'WhatsApp Link' },
-  { value: 'web', label: 'WhatsApp Web' },
   { value: 'app', label: 'Desktop App' },
+  { value: 'web', label: 'WhatsApp Web' },
+  { value: 'wa.me', label: 'WhatsApp Link' },
 ];
 
 // Fee defaulters: every student with a balance still owing, sorted by the amount, with
@@ -32,7 +32,7 @@ export function AccountantDefaulters({ students, payments, month, today, onToast
   const [queue, setQueue] = useState<{ studentName: string; phone: string; link: string; message: string }[]>([]);
   const [copied, setCopied] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sendMode, setSendMode] = useState<AlertSendMode>('wa.me');
+  const [sendMode, setSendMode] = useState<AlertSendMode>('app');
 
   useMemo(() => { void fetchAbsenteeSendMode().then((mode) => setSendMode(mode)); }, []);
 
